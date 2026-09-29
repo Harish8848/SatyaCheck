@@ -1,0 +1,12 @@
+# Secrets — never commit
+.env
+.env*.local
+
+
+# Environment variables
+.env*.local
+
+# Common ignores
+node_modules
+.next/
+.DS_Store

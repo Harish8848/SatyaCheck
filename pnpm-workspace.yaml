@@ -1,0 +1,11 @@
+pmOnFail: ignore
+
+onlyBuiltDependencies:
+  - esbuild
+
+minimumReleaseAgeExclude:
+  - '@next/*'
+  - next
+
+allowBuilds:
+  esbuild: set this to true or false
