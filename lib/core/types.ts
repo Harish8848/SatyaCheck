@@ -88,6 +88,8 @@ export type SourceTier = (typeof sourceTiers)[number]
 
 export type EvidenceItem = {
   id: string
+  /** The extracted claim this source was judged against. */
+  claimId?: string
   title: string
   url: string
   domain: string

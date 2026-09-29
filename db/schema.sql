@@ -25,6 +25,40 @@ create table if not exists verification_evidence (
   created_at timestamptz not null default now()
 );
 
+-- Authenticity result (C2PA / metadata / forensics fusion) for image and video submissions.
+alter table verification_requests add column if not exists ai_signal jsonb;
+
+-- Full pipeline report (ingest -> media integrity -> claims -> evidence -> assessment).
+alter table verification_requests add column if not exists input_meta jsonb;
+alter table verification_requests add column if not exists claims jsonb;
+alter table verification_requests add column if not exists stages jsonb;
+alter table verification_requests add column if not exists assessment jsonb;
+alter table verification_requests add column if not exists final_verdict text;
+
+-- Evidence gathered per extracted claim. Supersedes verification_evidence for new reports;
+-- the legacy table is kept so existing rows still load.
+create table if not exists verification_sources (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references verification_requests(id) on delete cascade,
+  claim_id text not null,
+  title text not null,
+  url text not null,
+  domain text not null,
+  publisher text not null,
+  tier text not null check (tier in ('primary', 'reputable', 'reference', 'unverified')),
+  relation text not null check (relation in ('supports', 'contradicts', 'context')),
+  published_at timestamptz,
+  snippet text not null,
+  quote text,
+  relevance integer not null,
+  authority integer not null,
+  recency integer,
+  provider text not null,
+  reasoning text,
+  created_at timestamptz not null default now()
+);
+create index if not exists verification_sources_request_id_idx on verification_sources (request_id);
+
 create index if not exists verification_requests_created_at_idx on verification_requests (created_at desc);
 create index if not exists verification_evidence_request_id_idx on verification_evidence (request_id);
 

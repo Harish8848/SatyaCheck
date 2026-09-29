@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { config } from '../core/config'
 import { log } from '../core/logger'
+import { assertPublicUrl } from '../core/net-guard'
 import { collapseWhitespace } from './ingest'
 
 /**
@@ -26,6 +27,8 @@ async function fetchWithGuards(url: string): Promise<{ bytes: Uint8Array; conten
   try {
     let current = url
     for (let hop = 0; hop <= config.maxRedirects; hop += 1) {
+      // Re-checked on every hop: a redirect can point at an internal address.
+      await assertPublicUrl(current)
       const response = await fetch(current, {
         signal: controller.signal,
         redirect: 'manual',

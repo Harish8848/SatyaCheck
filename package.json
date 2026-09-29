@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "tsx scripts/migrate.ts",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
     "test": "tsx --test tests/*.test.ts",
     "test:media": "tsx scripts/media-smoke.ts",
     "test:model": "tsx scripts/model-smoke.ts"
