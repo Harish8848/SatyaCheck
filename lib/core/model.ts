@@ -1,5 +1,7 @@
 import { generateText, Output } from 'ai'
-import { google } from '@ai-sdk/google'
+import { createGoogle } from '@ai-sdk/google'
+import { createCerebras } from '@ai-sdk/cerebras'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'
 import { config } from './config'
 import { describeError, log } from './logger'
@@ -13,7 +15,7 @@ export class ModelUnavailableError extends Error {
   }
 }
 
-const MAX_OVERLOAD_DELAY_MS = 20_000
+const MAX_OVERLOAD_DELAY_MS = 2_000
 
 /** Quota errors carry a suggested retry delay like "Please retry in 19.65s." */
 export function quotaRetryDelayMs(error: unknown): number | undefined {
@@ -46,6 +48,37 @@ function sleep(ms: number) {
 
 type Attempt = { modelId: string; tries: number; lastError?: unknown }
 
+function statusOf(error: unknown) { return Number((error as { statusCode?: unknown })?.statusCode ?? (error as { status?: unknown })?.status ?? 0) }
+function isQuotaOrUnavailable(error: unknown) {
+  const text = `${(error as Error)?.name ?? ''} ${(error as Error)?.message ?? ''}`
+  return /429|quota|rate.?limit|resource.?exhausted|model.*(not found|unavailable|retired)|not available to new users/i.test(`${text} ${statusOf(error)}`)
+}
+function isTransient(error: unknown) { return /500|502|503|timeout|timed out|overload|high demand|temporar/i.test(`${(error as Error)?.message ?? ''} ${statusOf(error)}`) }
+
+function providerFor(name: string): { name: string; model: string; call: (model: string) => any } | undefined {
+  if ((name === 'gemini' || name.startsWith('gemini-')) && (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY)) return { name: 'gemini', model: name === 'gemini' ? (process.env.GEMINI_MODEL || 'gemini-3.8-flash') : name, call: createGoogle({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY }) }
+  const grokApiKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY
+  if ((name === 'xai' || name === 'grok' || name.startsWith('xai/') || name.startsWith('grok/')) && grokApiKey) return { name: 'grok', model: name === 'xai' || name === 'grok' ? (process.env.GROK_MODEL || process.env.XAI_MODEL || 'grok-4.7') : name.slice(name.startsWith('grok/') ? 5 : 4), call: createOpenAICompatible({ name: 'grok', baseURL: process.env.GROK_BASE_URL || process.env.XAI_BASE_URL || 'https://api.x.ai/v1', apiKey: grokApiKey, supportsStructuredOutputs: true }) }
+  if ((name === 'cerebras' || name.startsWith('cerebras/')) && process.env.CEREBRAS_API_KEY) return { name: 'cerebras', model: name === 'cerebras' ? (process.env.CEREBRAS_MODEL || 'gpt-oss-120b') : name.slice(9), call: createCerebras({ apiKey: process.env.CEREBRAS_API_KEY }) }
+  if (name === 'ollama' || name.startsWith('ollama/')) {
+    const model = name === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.2:3b') : name.slice('ollama/'.length)
+    // Ollama's OpenAI-compatible endpoint works with the current AI SDK model
+    // interface; the legacy ollama-ai-provider package only implements v1.
+    const baseURL = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\/$/, '')
+    return {
+      name: 'ollama',
+      model,
+      call: createOpenAICompatible({
+        name: 'ollama',
+        baseURL,
+        apiKey: 'ollama',
+        supportsStructuredOutputs: false,
+      }),
+    }
+  }
+  return undefined
+}
+
 /**
  * Structured generation with ordered model fallback and bounded retries.
  *
@@ -63,19 +96,22 @@ export async function generateStructured<T>(options: {
 }): Promise<{ output: T; model: string; attempts: Attempt[] }> {
   const models = options.models ?? config.analystModels
   const attempts: Attempt[] = []
-  const baseRetries = options.maxRetriesPerModel ?? 2
+  const baseRetries = options.maxRetriesPerModel ?? 1
   // A capacity blip can clear on a second try, but a model that is *sustained*ly
   // overloaded will not: retrying it repeatedly just burns the request budget
   // and delays the fallbacks that would actually work. Two extra tries (three
   // total) is the sweet spot, then we move on to the next model.
-  const overloadRetries = Math.min(baseRetries + 1, 3)
+  const overloadRetries = Math.min(baseRetries + 1, 2)
 
-  for (const modelId of models) {
+  for (const providerName of models) {
+    const provider = providerFor(providerName)
+    if (!provider) continue
+    const modelId = `${provider.name}/${provider.model}`
     for (let attempt = 1; attempt <= overloadRetries; attempt += 1) {
       const started = Date.now()
       try {
         const result = await generateText({
-          model: google(modelId),
+          model: provider.call(provider.model),
           output: Output.object({ schema: options.schema, name: options.label }),
           system: options.system,
           messages: [
@@ -88,6 +124,7 @@ export async function generateStructured<T>(options: {
             },
           ],
           maxRetries: 0,
+          abortSignal: AbortSignal.timeout(config.modelTimeoutMs),
           temperature: 0,
         })
         attempts.push({ modelId, tries: attempt })
@@ -99,11 +136,11 @@ export async function generateStructured<T>(options: {
 
         // A quota-exhausted model will not recover on the next attempt, so move
         // on to the next fallback immediately instead of burning retries.
-        if (quotaRetryDelayMs(error) !== undefined) break
+        if (isQuotaOrUnavailable(error)) break
 
         // Schema/shape failures will not fix themselves either: retrying the same
         // model with the same prompt reproduces the same bad output.
-        if (!overloadRetryDelayMs(error) && attempt >= baseRetries) break
+        if (!isTransient(error) && attempt >= baseRetries) break
 
         const overloadDelay = overloadRetryDelayMs(error)
         const delay = overloadDelay ?? Math.min(250 * 2 ** (attempt - 1), 2_000)

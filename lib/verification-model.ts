@@ -1,7 +1,7 @@
 import type { verificationRequests, verificationSources } from '@/lib/db/schema'
 import type { AiContentSignal, Assessment, EvidenceItem, ExtractedClaim, IngestedInput, SourceTier, StageResult } from '@/lib/core/types'
 
-export const inputTypes = ['text', 'image', 'video', 'url'] as const
+export const inputTypes = ['text', 'image', 'video', 'audio', 'url'] as const
 export const statuses = ['queued', 'processing', 'completed', 'failed'] as const
 
 export type InputType = (typeof inputTypes)[number]

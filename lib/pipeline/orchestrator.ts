@@ -76,7 +76,10 @@ export async function runPipeline(submission: Submission): Promise<PipelineRepor
   let aiSignal: AiContentSignal | undefined
   let mediaContext: string | undefined
   const isMedia = submission.inputType === 'image' || submission.inputType === 'video'
-  if (isMedia && submission.media) {
+  if (submission.inputType === 'audio' && submission.media) {
+    tracker.skip('media_integrity', 'Audio has no image authenticity analysis.')
+    tracker.skip('ai_signal', 'Audio has no image authenticity analysis.')
+  } else if (isMedia && submission.media) {
     const media = submission.media
     const integrity = await tracker.run('media_integrity', async () => {
       const result = submission.inputType === 'image' ? await analyzeImage(media.bytes) : await analyzeVideo(media.bytes)
@@ -107,7 +110,7 @@ export async function runPipeline(submission: Submission): Promise<PipelineRepor
   const evidence: EvidenceItem[] = []
   if (toCheck.length) {
     await tracker.run('fact_checking', async () => {
-      const results = await mapLimit(toCheck, 2, (claim) => gatherEvidence(claim))
+      const results = await mapLimit(toCheck, 3, (claim) => gatherEvidence(claim))
       results.forEach((result) => {
         evidence.push(...result.items)
         notes.push(...result.notes)

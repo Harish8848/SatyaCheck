@@ -69,18 +69,23 @@ export function titleKey(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-/** One short-backoff retry recovers most cold-start timeouts without delaying requests noticeably. */
+/** Retry only server overloads. A timeout or quota failure should fail fast so
+ * the other research providers and the AI fallback can continue. */
 export async function fetchResearch(url: string, init: RequestInit): Promise<Response> {
-  let lastError: unknown
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const response = await fetch(url, { ...init, signal: AbortSignal.timeout(config.providerTimeoutMs) })
-      if (response.status !== 429 && response.status < 500) return response
-      lastError = new Error(`${url.split('?')[0]} returned ${response.status}`)
+      if (response.status >= 500 && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        continue
+      }
+      if (response.status >= 400) throw new Error(`${url.split('?')[0]} returned ${response.status}`)
+      return response
     } catch (error) {
-      lastError = error
+      // Network timeouts, 429s and other client errors are not helped by
+      // retrying the same provider inside this request.
+      throw error
     }
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 400 * attempt))
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  throw new Error('Research provider unavailable')
 }

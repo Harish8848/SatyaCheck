@@ -13,7 +13,7 @@ export type PipelineStage = (typeof pipelineStages)[number]
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 
-export type InputType = 'text' | 'image' | 'video' | 'url'
+export type InputType = 'text' | 'image' | 'video' | 'audio' | 'url'
 
 /**
  * A single forensic signal. `state` is intentionally four-valued: a check that

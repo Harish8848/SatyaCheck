@@ -1,12 +1,13 @@
 import { z } from 'zod'
 import { generateStructured } from '../lib/core/model'
 
-// tsx does not load .env on its own; the Next.js runtime does this for app code.
-if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+// tsx does not load Next.js env files automatically. Load .env.local first,
+// then .env, without replacing variables already provided by the shell.
+for (const file of ['.env.local', '.env']) {
   try {
-    process.loadEnvFile('.env')
+    process.loadEnvFile(file)
   } catch {
-    /* env comes from the shell or the hosting platform */
+    /* optional env file */
   }
 }
 

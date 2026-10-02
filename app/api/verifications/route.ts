@@ -29,7 +29,7 @@ export async function GET() {
   }
 }
 
-const mediaMimePrefix: Record<'image' | 'video', string> = { image: 'image/', video: 'video/' }
+const mediaMimePrefix: Record<'image' | 'video' | 'audio', string> = { image: 'image/', video: 'video/', audio: 'audio/' }
 
 /** Handles multipart uploads: fields inputType / inputText plus a `file` part. Size is enforced before any parsing. */
 async function handleMultipart(request: Request) {
@@ -41,8 +41,8 @@ async function handleMultipart(request: Request) {
   }
 
   const inputType = form.get('inputType')
-  if (inputType !== 'image' && inputType !== 'video') {
-    return NextResponse.json({ error: 'File uploads are only supported for image or video input.' }, { status: 400 })
+  if (inputType !== 'image' && inputType !== 'video' && inputType !== 'audio') {
+    return NextResponse.json({ error: 'File uploads are only supported for image, video, or audio input.' }, { status: 400 })
   }
   const file = form.get('file')
   if (!(file instanceof File) || file.size === 0) {
@@ -51,7 +51,7 @@ async function handleMultipart(request: Request) {
   if (!file.type.startsWith(mediaMimePrefix[inputType])) {
     return NextResponse.json({ error: `The attached file is not a ${inputType}.` }, { status: 415 })
   }
-  const ceiling = inputType === 'video' ? config.maxVideoBytes : config.maxImageBytes
+  const ceiling = inputType === 'video' || inputType === 'audio' ? config.maxVideoBytes : config.maxImageBytes
   if (file.size > ceiling) {
     return NextResponse.json({ error: `The ${inputType} is ${(file.size / 1_048_576).toFixed(1)} MB; the limit is ${(ceiling / 1_048_576).toFixed(0)} MB.` }, { status: 413 })
   }
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
   const sourceName = payload.sourceName
 
   if (!isInputType(inputType)) {
-    return NextResponse.json({ error: 'inputType must be text, image, video, or url.' }, { status: 400 })
+    return NextResponse.json({ error: 'inputType must be text, image, video, audio, or url.' }, { status: 400 })
   }
   if (inputText !== undefined && typeof inputText !== 'string') {
     return NextResponse.json({ error: 'inputText must be a string.' }, { status: 400 })
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
   if (sourceName !== undefined && typeof sourceName !== 'string') {
     return NextResponse.json({ error: 'sourceName must be a string.' }, { status: 400 })
   }
-  if ((inputType === 'image' || inputType === 'video') && !inputText?.trim()) {
+  if ((inputType === 'image' || inputType === 'video' || inputType === 'audio') && !inputText?.trim()) {
     return NextResponse.json({ error: `Upload the ${inputType} file as multipart form data, or describe it in inputText.` }, { status: 400 })
   }
   if (!inputText?.trim()) {

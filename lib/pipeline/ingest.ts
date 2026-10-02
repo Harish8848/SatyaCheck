@@ -10,7 +10,7 @@ import { config } from '../core/config'
  */
 
 export const ingestSchema = z.object({
-  inputType: z.enum(['text', 'image', 'video', 'url']),
+  inputType: z.enum(['text', 'image', 'video', 'audio', 'url']),
   inputText: z.string().max(200_000).optional(),
   sourceName: z.string().max(500).optional(),
   sourceUrl: z.string().max(2000).optional(),
@@ -20,7 +20,7 @@ export const ingestSchema = z.object({
 export type IngestRequest = z.infer<typeof ingestSchema>
 
 export type IngestedInput = {
-  inputType: 'text' | 'image' | 'video' | 'url'
+  inputType: 'text' | 'image' | 'video' | 'audio' | 'url'
   text: string
   sourceLabel: string
   url?: string
@@ -56,7 +56,7 @@ function decodeMedia(request: IngestRequest): { bytes: Uint8Array; mime: string 
   } catch {
     return { error: 'Media payload was not valid base64.' }
   }
-  const ceiling = request.inputType === 'video' ? config.maxVideoBytes : config.maxImageBytes
+  const ceiling = request.inputType === 'video' || request.inputType === 'audio' ? config.maxVideoBytes : config.maxImageBytes
   if (bytes.length > ceiling) {
     return { error: `Media is ${(bytes.length / 1_048_576).toFixed(1)} MB; the ${request.inputType} limit is ${(ceiling / 1_048_576).toFixed(0)} MB.` }
   }
@@ -79,7 +79,7 @@ export function validateIngest(raw: unknown): { ok: true; value: IngestRequest }
     const blocked = blockedUrl(candidate.trim())
     if (blocked) return { ok: false, error: blocked }
   }
-  if ((value.inputType === 'image' || value.inputType === 'video') && !value.mediaBase64 && !value.inputText?.trim()) {
+  if ((value.inputType === 'image' || value.inputType === 'video' || value.inputType === 'audio') && !value.mediaBase64 && !value.inputText?.trim()) {
     return { ok: false, error: `Attach the ${value.inputType} file or describe what it shows.` }
   }
   return { ok: true, value }

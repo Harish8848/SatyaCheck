@@ -3,7 +3,7 @@
 
 create table if not exists verification_requests (
   id uuid primary key default gen_random_uuid(),
-  input_type text not null check (input_type in ('text', 'image', 'video', 'url')),
+  input_type text not null check (input_type in ('text', 'image', 'video', 'audio', 'url')),
   input_text text,
   source_name text,
   status text not null default 'completed' check (status in ('queued', 'processing', 'completed', 'failed')),
@@ -13,6 +13,9 @@ create table if not exists verification_requests (
   created_at timestamptz not null default now(),
   completed_at timestamptz
 );
+
+alter table verification_requests drop constraint if exists verification_requests_input_type_check;
+alter table verification_requests add constraint verification_requests_input_type_check check (input_type in ('text', 'image', 'video', 'audio', 'url'));
 
 create table if not exists verification_evidence (
   id uuid primary key default gen_random_uuid(),

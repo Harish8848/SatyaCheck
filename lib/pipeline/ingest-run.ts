@@ -6,6 +6,7 @@ import { generateStructured } from '../core/model'
 import type { InputType, IngestedInput } from '../core/types'
 import { blockedUrl, collapseWhitespace } from './ingest'
 import { extractPage } from './url-extract'
+import { extractVideoFrames, extractWithTesseract, readExifTool, transcribeWithWhisper } from '../media/local-tools'
 
 /**
  * Ingest stage: turn any submission into plain text plus provenance notes.
@@ -34,19 +35,44 @@ const VISION_SYSTEM = [
   'Leave a field empty when there is nothing to report.',
 ].join(' ')
 
-async function transcribeMedia(kind: 'image' | 'video', media: { bytes: Uint8Array; mime: string }, notes: string[]): Promise<string> {
+async function transcribeMedia(kind: 'image' | 'video' | 'audio', media: { bytes: Uint8Array; mime: string }, notes: string[]): Promise<string> {
+  const [ocrText, metadata, speech, frames] = await Promise.all([
+    kind === 'image' ? extractWithTesseract(media.bytes, media.mime) : Promise.resolve(undefined),
+    kind === 'image' ? readExifTool(media.bytes, media.mime) : Promise.resolve(undefined),
+    kind === 'video' || kind === 'audio' ? transcribeWithWhisper(media.bytes, media.mime) : Promise.resolve(undefined),
+    kind === 'video' ? extractVideoFrames(media.bytes, media.mime) : Promise.resolve([]),
+  ])
+  if (ocrText) notes.push(`Tesseract OCR extracted ${ocrText.length} characters.`)
+  if (metadata) {
+    try {
+      const tags = Object.entries((JSON.parse(metadata) as Record<string, unknown>[])[0] ?? {}).filter(([key]) => key !== 'SourceFile')
+      if (tags.length) notes.push(`ExifTool metadata: ${tags.slice(0, 8).map(([key, value]) => `${key}=${String(value).slice(0, 100)}`).join('; ')}.`)
+    } catch {
+      notes.push('ExifTool completed its metadata pass; built in container and EXIF parsers remain authoritative.')
+    }
+  }
+  if (speech) notes.push(`Whisper transcription extracted ${speech.length} characters.`)
+  if (kind === 'video') notes.push(frames.length ? `FFmpeg extracted ${frames.length} representative video frame(s).` : 'FFmpeg frame extraction unavailable; checking the uploaded video directly with the configured vision model.')
+  if (kind === 'audio') {
+    if (!speech) notes.push('Whisper was unavailable or could not transcribe this audio; no transcript was available to fact-check.')
+    return speech ? `Speech in the audio: ${speech}` : ''
+  }
+  const files = kind === 'video' && frames.length
+    ? frames.map((data) => ({ data: new Uint8Array(data), mediaType: 'image/jpeg' }))
+    : [{ data: media.bytes, mediaType: media.mime }]
   try {
     const { output, model } = await generateStructured({
       label: `${kind}-transcription`,
       schema: transcriptSchema,
       system: VISION_SYSTEM,
-      prompt: `Transcribe this ${kind}.`,
+      prompt: `Transcribe this ${kind}. ${kind === 'video' ? 'The attached images are chronological representative frames; transcribe visible text and describe the scene.' : 'Transcribe visible text.'}`,
       models: [...config.visionModels],
-      files: [{ data: media.bytes, mediaType: media.mime }],
+      files,
     })
-    const parts = [
+  const parts = [
       output.visibleText.trim() && `Text visible in the ${kind}: ${output.visibleText.trim()}`,
-      output.spokenText.trim() && `Speech in the ${kind}: ${output.spokenText.trim()}`,
+      (speech || output.spokenText).trim() && `Speech in the ${kind}: ${(speech || output.spokenText).trim()}`,
+      ocrText?.trim() && `Text recognized by Tesseract OCR: ${ocrText.trim()}`,
     ].filter(Boolean) as string[]
     if (output.description.trim()) notes.push(`Vision description (${model}): ${output.description.trim()}`)
     if (!parts.length) notes.push(`No readable text or speech was found in the ${kind}.`)
@@ -88,7 +114,7 @@ export async function ingestSubmission(submission: Submission): Promise<Ingested
     }
   }
 
-  const kind = submission.inputType
+  const kind = submission.inputType as 'image' | 'video' | 'audio'
   const media = submission.media
   const transcript = media ? await transcribeMedia(kind, media, notes) : ''
   const text = collapseWhitespaceKeepingLines([typed && `Caption / claim supplied by the user: ${typed}`, transcript].filter(Boolean).join('\n'))

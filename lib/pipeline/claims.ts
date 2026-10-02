@@ -50,7 +50,10 @@ export async function extractClaims(
   const { output, model } = await generateStructured({
     label: 'claim-extraction',
     schema: claimSchema,
-    models: [config.plannerModel, ...config.analystModels],
+    // The provider manager already owns model fallback. Passing the planner
+    // model plus the provider list here caused a duplicate Gemini call before
+    // Groq/Cerebras could be reached.
+    models: config.analystModels,
     system: SYSTEM,
     prompt: [`Source: ${context.sourceLabel}`, context.aiSignalSummary ? `Media context: ${context.aiSignalSummary}` : '', 'Extract claims from:', trimmed].filter(Boolean).join('\n'),
   })
