@@ -14,7 +14,10 @@
     "test:model": "tsx scripts/model-smoke.ts"
   },
   "dependencies": {
+    "@ai-sdk/cerebras": "^3.0.60",
     "@ai-sdk/google": "^4.0.82",
+    "@ai-sdk/groq": "^4.0.53",
+    "@ai-sdk/openai-compatible": "^3.0.60",
     "@base-ui/react": "^1.5.0",
     "@mozilla/readability": "^0.6.0",
     "@vercel/analytics": "1.6.1",
@@ -26,6 +29,7 @@
     "linkedom": "^0.18.13",
     "lucide-react": "^1.16.0",
     "next": "16.3.3",
+    "ollama-ai-provider": "^1.2.0",
     "pg": "^8.23.0",
     "react": "^19",
     "react-dom": "^19",
