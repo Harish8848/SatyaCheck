@@ -35,6 +35,7 @@ export function toSource(row: SourceRow): EvidenceItem {
   return {
     id: row.id, claimId: row.claimId, title: row.title, url: row.url, domain: row.domain, publisher: row.publisher,
     tier: row.tier as SourceTier, relation: row.relation as EvidenceItem['relation'], publishedAt: row.publishedAt?.toISOString(),
+    relevanceKind: row.relevanceKind ?? 'indirect', evidenceBasis: row.evidenceBasis ?? 'search_snippet', quoteVerified: row.quoteVerified ?? false,
     snippet: row.snippet, quote: row.quote ?? undefined, relevance: row.relevance, authority: row.authority,
     recency: row.recency ?? undefined, provider: row.provider, reasoning: row.reasoning ?? undefined,
   }

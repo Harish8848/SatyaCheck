@@ -1,4 +1,5 @@
 import { config } from '../core/config'
+import type { EvidenceBasis } from '../core/types'
 
 /** Shared types and parsing helpers for the web research providers. */
 
@@ -6,6 +7,7 @@ export type ResearchSource = {
   title: string
   url: string
   snippet: string
+  evidenceBasis: EvidenceBasis
   publisher?: string
   /** ISO-8601 when the provider exposes a date. */
   publishedAt?: string

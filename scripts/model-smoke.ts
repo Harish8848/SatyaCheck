@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { generateStructured } from '../lib/core/model'
 
 // tsx does not load Next.js env files automatically. Load .env.local first,
 // then .env, without replacing variables already provided by the shell.
@@ -18,6 +17,8 @@ const schema = z.object({
 })
 
 async function main() {
+  // Import after environment loading because config.ts reads settings on import.
+  const { generateStructured } = await import('../lib/core/model')
   const started = Date.now()
   const r = await generateStructured({
     label: 'smoke',

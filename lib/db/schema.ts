@@ -1,5 +1,5 @@
-import { integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import type { AiContentSignal, Assessment, ExtractedClaim, IngestedInput, StageResult } from '@/lib/core/types'
+import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import type { AiContentSignal, Assessment, EvidenceBasis, EvidenceRelevanceKind, ExtractedClaim, IngestedInput, StageResult } from '@/lib/core/types'
 
 export const verificationRequests = pgTable('verification_requests', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -41,6 +41,9 @@ export const verificationSources = pgTable('verification_sources', {
   publisher: text('publisher').notNull(),
   tier: text('tier').notNull(),
   relation: text('relation').notNull(),
+  relevanceKind: text('relevance_kind').$type<EvidenceRelevanceKind>().notNull().default('indirect'),
+  evidenceBasis: text('evidence_basis').$type<EvidenceBasis>().notNull().default('search_snippet'),
+  quoteVerified: boolean('quote_verified').notNull().default(false),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   snippet: text('snippet').notNull(),
   quote: text('quote'),

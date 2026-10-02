@@ -27,7 +27,8 @@ async function persistReport(id: string, report: PipelineReport) {
     if (report.evidence.length) {
       await tx.insert(verificationSources).values(report.evidence.map((item) => ({
         requestId: id, claimId: item.claimId ?? '', title: item.title, url: item.url, domain: item.domain, publisher: item.publisher,
-        tier: item.tier, relation: item.relation, publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, snippet: item.snippet,
+        tier: item.tier, relation: item.relation, relevanceKind: item.relevanceKind, evidenceBasis: item.evidenceBasis,
+        quoteVerified: item.quoteVerified, publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, snippet: item.snippet,
         quote: item.quote ?? null, relevance: item.relevance, authority: item.authority, recency: item.recency ?? null,
         provider: item.provider, reasoning: item.reasoning ?? null,
       })))

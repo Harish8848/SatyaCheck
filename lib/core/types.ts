@@ -82,6 +82,10 @@ export type ExtractedClaim = {
 
 export const evidenceRelations = ['supports', 'contradicts', 'context'] as const
 export type EvidenceRelation = (typeof evidenceRelations)[number]
+export const evidenceRelevanceKinds = ['direct', 'indirect'] as const
+export type EvidenceRelevanceKind = (typeof evidenceRelevanceKinds)[number]
+export const evidenceBases = ['search_snippet', 'article_content'] as const
+export type EvidenceBasis = (typeof evidenceBases)[number]
 
 export const sourceTiers = ['primary', 'reputable', 'reference', 'unverified'] as const
 export type SourceTier = (typeof sourceTiers)[number]
@@ -96,6 +100,12 @@ export type EvidenceItem = {
   publisher: string
   tier: SourceTier
   relation: EvidenceRelation
+  /** Semantic relationship to the claim, separate from its numeric search relevance. */
+  relevanceKind: EvidenceRelevanceKind
+  /** Search-result text is evidence about what a publisher reports, not an independently checked article quote. */
+  evidenceBasis: EvidenceBasis
+  /** True only when an exact quote was checked against retrieved article content. */
+  quoteVerified: boolean
   publishedAt?: string
   snippet: string
   /** Verbatim span from the source that drives the relation, when one exists. */

@@ -17,6 +17,7 @@ export async function searchGdelt(query: string): Promise<ResearchSource[]> {
       title: article.title!,
       url: article.url!,
       snippet: article.title!,
+      evidenceBasis: 'search_snippet',
       publisher: article.domain,
       publishedAt: toIso(article.seendate),
       provider: 'GDELT',
@@ -37,7 +38,7 @@ export async function searchGoogleNews(query: string): Promise<ResearchSource[]>
       const rawTitle = firstTag(item, 'title')
       if (!url || !rawTitle || !url.startsWith('http')) return []
       const { headline, publisher } = splitPublisher(rawTitle)
-      return [{ title: headline, url, snippet: headline, publisher, publishedAt: toIso(firstTag(item, 'pubDate')), provider: 'Google News' }]
+      return [{ title: headline, url, snippet: headline, evidenceBasis: 'search_snippet', publisher, publishedAt: toIso(firstTag(item, 'pubDate')), provider: 'Google News' }]
     })
     .slice(0, 6)
 }

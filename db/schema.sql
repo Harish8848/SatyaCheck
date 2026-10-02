@@ -50,6 +50,9 @@ create table if not exists verification_sources (
   publisher text not null,
   tier text not null check (tier in ('primary', 'reputable', 'reference', 'unverified')),
   relation text not null check (relation in ('supports', 'contradicts', 'context')),
+  relevance_kind text not null default 'indirect' check (relevance_kind in ('direct', 'indirect')),
+  evidence_basis text not null default 'search_snippet' check (evidence_basis in ('search_snippet', 'article_content')),
+  quote_verified boolean not null default false,
   published_at timestamptz,
   snippet text not null,
   quote text,
@@ -60,6 +63,9 @@ create table if not exists verification_sources (
   reasoning text,
   created_at timestamptz not null default now()
 );
+alter table verification_sources add column if not exists relevance_kind text not null default 'indirect';
+alter table verification_sources add column if not exists evidence_basis text not null default 'search_snippet';
+alter table verification_sources add column if not exists quote_verified boolean not null default false;
 create index if not exists verification_sources_request_id_idx on verification_sources (request_id);
 
 create index if not exists verification_requests_created_at_idx on verification_requests (created_at desc);

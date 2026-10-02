@@ -35,13 +35,17 @@ async function searchWikipedia(query: string): Promise<ResearchSource[]> {
   const data = (await response.json()) as { query?: { search?: Array<{ title?: string; snippet?: string }> } }
   const results = (data.query?.search ?? []).filter((item) => item.title)
   return Promise.all(
-    results.map(async (item) => ({
-      title: item.title!,
-      url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title!.replace(/\s+/g, '_'))}`,
-      snippet: (await wikipediaExtract(item.title!)) ?? stripHtml(item.snippet ?? ''),
-      publisher: 'Wikipedia',
-      provider: 'Wikipedia',
-    })),
+    results.map(async (item) => {
+      const extract = await wikipediaExtract(item.title!)
+      return {
+        title: item.title!,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title!.replace(/\s+/g, '_'))}`,
+        snippet: extract ?? stripHtml(item.snippet ?? ''),
+        evidenceBasis: extract ? 'article_content' as const : 'search_snippet' as const,
+        publisher: 'Wikipedia',
+        provider: 'Wikipedia',
+      }
+    }),
   )
 }
 
@@ -61,7 +65,7 @@ async function searchCrossref(query: string): Promise<ResearchSource[]> {
     const journal = stripHtml(item['container-title']?.[0] ?? '')
     const year = item.issued?.['date-parts']?.[0]?.[0]
     const detail = [journal, year].filter(Boolean).join(', ')
-    return [{ title, url, snippet: `${title}${detail ? ` (${detail})` : ''}`, publisher: journal || 'Crossref', publishedAt: year ? toIso(String(year)) : undefined, provider: 'Crossref' }]
+    return [{ title, url, snippet: `${title}${detail ? ` (${detail})` : ''}`, evidenceBasis: 'search_snippet', publisher: journal || 'Crossref', publishedAt: year ? toIso(String(year)) : undefined, provider: 'Crossref' }]
   })
 }
 

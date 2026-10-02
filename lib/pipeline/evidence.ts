@@ -8,8 +8,8 @@ import { classifySource } from './sources'
 
 /**
  * Per-claim web evidence: plan queries, search, rank, then have the model judge
- * each source using only that source's text. Directional judgements must carry
- * a verifiable quote or they are downgraded to context (see evidence-judge).
+ * each source using only that source's text. Classification, relevance and
+ * quote verification are recorded independently (see evidence-judge).
  */
 
 const CANDIDATES_PER_CLAIM = 8
@@ -57,7 +57,7 @@ export async function gatherEvidence(claim: ExtractedClaim): Promise<ClaimEviden
   let model: string | undefined
   try {
     const sourceBlock = top
-      .map((c, i) => `[${i + 1}] Publisher: ${c.cls.publisher} (${c.cls.tier})\nTitle: ${c.source.title}\nSnippet: ${c.source.snippet}${c.source.publishedAt ? `\nPublished: ${c.source.publishedAt.slice(0, 10)}` : ''}`)
+      .map((c, i) => `[${i + 1}] Publisher: ${c.cls.publisher} (${c.cls.tier})\nEvidence basis: ${c.source.evidenceBasis}\nTitle: ${c.source.title}\nSnippet: ${c.source.snippet}${c.source.publishedAt ? `\nPublished: ${c.source.publishedAt.slice(0, 10)}` : ''}`)
       .join('\n\n')
     const result = await generateStructured({
       label: 'evidence-judgement',
@@ -78,5 +78,8 @@ export async function gatherEvidence(claim: ExtractedClaim): Promise<ClaimEviden
     if (judgement?.relation === 'irrelevant') return
     items.push(toItem(claim, candidate, judgement, judged.size > 0, items.length + 1))
   })
+  if (items.some((item) => item.relation !== 'context' && item.evidenceBasis === 'search_snippet')) {
+    notes.push('Some directional evidence comes from search-result headlines or snippets; the linked article text was not retrieved, so those statements are not independently verified article quotes.')
+  }
   return { items, notes, queries, model }
 }

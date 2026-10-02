@@ -72,7 +72,7 @@ function providerFor(name: string): { name: string; model: string; call: (model:
         name: 'ollama',
         baseURL,
         apiKey: 'ollama',
-        supportsStructuredOutputs: false,
+        supportsStructuredOutputs: true,
       }),
     }
   }

@@ -28,6 +28,7 @@ const REPUTABLE_DOMAINS = [
   'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk', 'npr.org', 'pbs.org', 'nytimes.com', 'washingtonpost.com',
   'wsj.com', 'theguardian.com', 'ft.com', 'economist.com', 'bloomberg.com', 'aljazeera.com', 'dw.com', 'france24.com',
   'abc.net.au', 'cbc.ca', 'thehindu.com', 'kathmandupost.com', 'afp.com', 'factcheck.afp.com', 'factcheck.org',
+  'espn.com', 'sports.yahoo.com', 'yahoo.com', 'dailysabah.com',
   'snopes.com', 'politifact.com', 'fullfact.org', 'boomlive.in', 'altnews.in', 'nature.com', 'science.org',
   'thelancet.com', 'nejm.org',
 ]
@@ -36,7 +37,7 @@ const REPUTABLE_PUBLISHERS = [
   'reuters', 'associated press', 'ap news', 'bbc news', 'bbc', 'npr', 'pbs newshour', 'the new york times',
   'the washington post', 'the wall street journal', 'the guardian', 'financial times', 'the economist', 'bloomberg',
   'al jazeera', 'dw', 'france 24', 'afp fact check', 'factcheck.org', 'snopes', 'politifact', 'full fact',
-  'the hindu', 'the kathmandu post', 'nature', 'science', 'the lancet',
+  'the hindu', 'the kathmandu post', 'nature', 'science', 'the lancet', 'espn', 'yahoo sports', 'daily sabah',
 ]
 
 const REFERENCE_DOMAINS = [

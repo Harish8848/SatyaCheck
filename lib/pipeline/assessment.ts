@@ -1,7 +1,7 @@
 import { generateStructured } from '../core/model'
 import { describeError, log } from '../core/logger'
 import type { Assessment } from '../core/types'
-import { ASSESSMENT_SYSTEM, assessmentSchema, buildPrompt, mediaCaveat, type AssessInput } from './assessment-prompt'
+import { ASSESSMENT_SYSTEM, assessmentSchema, buildPrompt, mediaCaveat, snippetOnlyNarrative, type AssessInput } from './assessment-prompt'
 import { capConfidence, computeStats, nonFactualVerdict, reconcileVerdict, verdictFromStats } from './assessment-stats'
 
 export { computeStats } from './assessment-stats'
@@ -34,11 +34,12 @@ export async function assess(input: AssessInput): Promise<Assessment> {
   try {
     const { output, model } = await generateStructured({ label: 'final-assessment', schema: assessmentSchema, system: ASSESSMENT_SYSTEM, prompt: buildPrompt(input, factual, stats) })
     const reconciled = reconcileVerdict(output.verdict, stats)
+    const attributed = snippetOnlyNarrative(input.evidence)
     return finish({
       verdict: reconciled.verdict,
       confidence: capConfidence(reconciled.verdict === output.verdict ? output.confidence : 15, stats),
-      headline: output.headline,
-      reasoning: output.reasoning,
+      headline: attributed?.headline ?? output.headline,
+      reasoning: attributed?.reasoning ?? output.reasoning,
       caveats: [...baseCaveats, ...output.caveats, ...(reconciled.caveat ? [reconciled.caveat] : [])],
       model,
     })
