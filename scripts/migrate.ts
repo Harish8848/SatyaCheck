@@ -7,7 +7,7 @@ async function main() {
   const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL
   if (!connectionString) throw new Error('DATABASE_URL (or POSTGRES_URL) is not set.')
   const sql = readFileSync(join(__dirname, '..', 'db', 'schema.sql'), 'utf8')
-  const pool = new Pool({ connectionString })
+  const pool = new Pool({ connectionString, connectionTimeoutMillis: 5_000 })
   try {
     await pool.query('create extension if not exists pgcrypto')
     await pool.query(sql)

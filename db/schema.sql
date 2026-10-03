@@ -38,6 +38,12 @@ alter table verification_requests add column if not exists stages jsonb;
 alter table verification_requests add column if not exists assessment jsonb;
 alter table verification_requests add column if not exists final_verdict text;
 
+-- Keep request checks aligned with lib/db/schema.ts and allow repeatable migration.
+alter table verification_requests drop constraint if exists verification_requests_status_check;
+alter table verification_requests add constraint verification_requests_status_check check (status in ('queued', 'processing', 'completed', 'failed'));
+alter table verification_requests drop constraint if exists verification_requests_confidence_check;
+alter table verification_requests add constraint verification_requests_confidence_check check (confidence between 0 and 100);
+
 -- Evidence gathered per extracted claim. Supersedes verification_evidence for new reports;
 -- the legacy table is kept so existing rows still load.
 create table if not exists verification_sources (
@@ -66,6 +72,14 @@ create table if not exists verification_sources (
 alter table verification_sources add column if not exists relevance_kind text not null default 'indirect';
 alter table verification_sources add column if not exists evidence_basis text not null default 'search_snippet';
 alter table verification_sources add column if not exists quote_verified boolean not null default false;
+alter table verification_sources drop constraint if exists verification_sources_tier_check;
+alter table verification_sources add constraint verification_sources_tier_check check (tier in ('primary', 'reputable', 'reference', 'unverified'));
+alter table verification_sources drop constraint if exists verification_sources_relation_check;
+alter table verification_sources add constraint verification_sources_relation_check check (relation in ('supports', 'contradicts', 'context'));
+alter table verification_sources drop constraint if exists verification_sources_relevance_kind_check;
+alter table verification_sources add constraint verification_sources_relevance_kind_check check (relevance_kind in ('direct', 'indirect'));
+alter table verification_sources drop constraint if exists verification_sources_evidence_basis_check;
+alter table verification_sources add constraint verification_sources_evidence_basis_check check (evidence_basis in ('search_snippet', 'article_content'));
 create index if not exists verification_sources_request_id_idx on verification_sources (request_id);
 
 create index if not exists verification_requests_created_at_idx on verification_requests (created_at desc);
