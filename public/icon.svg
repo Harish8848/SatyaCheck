@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SatyaCheck">
-  <rect width="64" height="64" rx="15" fill="#17324d"/>
-  <path d="M32 8 49 15v13c0 12.1-6.8 21.7-17 28-10.2-6.3-17-15.9-17-28V15L32 8Z" fill="#8ecabf"/>
-  <path d="m23.5 31.5 5.8 5.8 12-12.6" fill="none" stroke="#17324d" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.6"/>
-</svg>
