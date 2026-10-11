@@ -405,12 +405,12 @@ export async function analyzeVideo(bytes: Uint8Array): Promise<VideoIntegrity> {
     signal({
       category: 'provenance',
       label: 'C2PA / embedded provenance (video)',
-      state: identified && container.xmpPresent ? 'pass' : 'inconclusive',
+      state: 'inconclusive',
       applicable: identified,
       executed: identified,
       observed: container.xmpPresent ? 'XMP/UUID provenance box present.' : 'No embedded XMP/C2PA box found.',
       meaning: 'Almost no in-the-wild clips carry signed provenance; absence is expected and proves nothing.',
-      strength: 20,
+      strength: 0,
       method: 'MP4/MOV box walk for XMP and UUID chunks.',
       caveat: 'Cloud C2PA registries are not queried and signatures are not validated.',
     }),
@@ -420,14 +420,14 @@ export async function analyzeVideo(bytes: Uint8Array): Promise<VideoIntegrity> {
     signal({
       category: 'metadata',
       label: 'Container / encoder metadata',
-      state: container.softwareHints.length ? 'flag' : container.majorBrand ? 'pass' : 'inconclusive',
+      state: 'inconclusive',
       applicable: identified,
       executed: identified,
       observed: container.majorBrand
         ? `Brand ${container.majorBrand}; ${container.durationSeconds ?? '?'}s; ${container.tracks.length} track(s).`
         : 'Brand unreadable.',
       meaning: 'Encoder tags reveal the export tool, never the truth of the depicted events.',
-      strength: 10,
+      strength: 0,
       method: 'ftyp / mvhd / trak header parse.',
     }),
   )
@@ -436,12 +436,12 @@ export async function analyzeVideo(bytes: Uint8Array): Promise<VideoIntegrity> {
     signal({
       category: 'watermark',
       label: 'Editor / platform traces',
-      state: container.softwareHints.length ? 'flag' : 'inconclusive',
+      state: 'inconclusive',
       applicable: identified,
       executed: identified,
       observed: tools || 'No editor string embedded.',
       meaning: 'Re-encode traces degrade frame provenance; the claims still need external evidence.',
-      strength: 10,
+      strength: 0,
       method: 'ASCII scan of the first 256 KB for exporter tags.',
     }),
   )
@@ -462,10 +462,16 @@ export async function analyzeVideo(bytes: Uint8Array): Promise<VideoIntegrity> {
   )
   limitations.push('Frame-level video forensics (double-compression, PRNU, deepfake scores) are not implemented in this build.')
 
-  const aiSignal = fuseSignals(signals, limitations, 'video')
+  const aiSignal: AiContentSignal = {
+    type: 'indeterminate', score: 0,
+    coverage: Math.round(signals.filter(s => s.executed).length / signals.length * 100),
+    signals: signals.map(s => ({ ...s, contribution: 0 })),
+    summary: 'Authenticity undetermined. Basic file metadata was inspected, but no frame-level manipulation analysis was performed. Container brands and editor strings do not establish AI generation or authenticity.',
+    limitations,
+  }
   log('info', 'video integrity complete', { kind: container.kind, score: aiSignal.score, type: aiSignal.type })
 
-  const contextText = `Video: ${container.kind.toUpperCase()}. ${tools ? `Tools: ${tools}.` : 'No encoder trace.'} AI-content suspicion ${aiSignal.score}/100 (${aiSignal.type}).`
+  const contextText = `Video: ${container.kind.toUpperCase()}. ${tools ? `Tools: ${tools}.` : 'No encoder trace.'} Authenticity undetermined; metadata alone cannot establish manipulation.`
   return { container, aiSignal, contextText }
 }
 

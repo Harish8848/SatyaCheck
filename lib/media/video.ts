@@ -96,7 +96,6 @@ export function parseVideo(bytes: Uint8Array): VideoContainer {
     }
     const hints = new Set(out.softwareHints)
     scanHints(bytes, hints)
-    if (out.majorBrand) hints.add(`brand ${out.majorBrand}`)
     out.softwareHints = [...hints]
     if (!out.tracks.length) out.warnings.push('No track headers found inside moov; file may be truncated or fragmented.')
     return out

@@ -1,3 +1,4 @@
+import { ModelUnavailableError } from '../core/model'
 import { config } from '../core/config'
 import { describeError, log } from '../core/logger'
 import { analyzeImage, analyzeVideo } from './media-integrity'
@@ -38,7 +39,7 @@ class Tracker {
     } catch (error) {
       Object.assign(entry, { state: 'failed', error: describeError(error) })
       log('error', 'pipeline stage failed', { stage, error: describeError(error) })
-      if (stage === 'ingest') throw error
+      if (stage === 'ingest' || (stage === 'claim_extraction' && error instanceof ModelUnavailableError)) throw error
       return undefined
     } finally {
       entry.finishedAt = new Date().toISOString()
@@ -110,7 +111,7 @@ export async function runPipeline(submission: Submission): Promise<PipelineRepor
   const evidence: EvidenceItem[] = []
   if (toCheck.length) {
     await tracker.run('fact_checking', async () => {
-      const results = await mapLimit(toCheck, 3, (claim) => gatherEvidence(claim))
+      const results = await mapLimit(toCheck, 1, (claim) => gatherEvidence(claim))
       results.forEach((result) => {
         evidence.push(...result.items)
         notes.push(...result.notes)

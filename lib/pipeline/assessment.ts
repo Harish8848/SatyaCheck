@@ -1,3 +1,4 @@
+import { claimResults } from '../core/claim-results'
 import { generateStructured } from '../core/model'
 import { describeError, log } from '../core/logger'
 import type { Assessment } from '../core/types'
@@ -16,9 +17,18 @@ export async function assess(input: AssessInput): Promise<Assessment> {
   const stats = computeStats(input.evidence)
   const baseCaveats = [...input.notes, ...mediaCaveat(input.aiSignal)]
   if (input.uncheckedClaims > 0) baseCaveats.push(`${input.uncheckedClaims} further factual claim(s) were listed but not checked because of the per-submission limit.`)
+  const perClaim = claimResults(input.claims, input.evidence)
+  const multiClaim = perClaim.length > 1
+  const unresolved = perClaim.filter(c => c.unresolved).length
+  const claimNarrative = perClaim.map(c => `${c.text} — ${c.label}. ${c.detail}`).join('\n\n')
   const finish = (partial: Pick<Assessment, 'verdict' | 'confidence' | 'headline' | 'reasoning' | 'model'> & { caveats: string[] }): Assessment => ({
     ...partial,
     ...stats,
+    ...(multiClaim ? {
+      ...(unresolved ? { verdict: 'unverified' as const, confidence: Math.min(partial.confidence, 15) } : {}),
+      headline: unresolved ? `${unresolved} of ${perClaim.length} factual claims remain unverified; see the separate findings below.` : 'Evidence findings are listed separately for each factual claim.',
+      reasoning: claimNarrative,
+    } : {}),
     caveats: [...new Set(partial.caveats)].slice(0, 10),
   })
 
@@ -50,7 +60,7 @@ export async function assess(input: AssessInput): Promise<Assessment> {
       verdict,
       confidence: capConfidence(verdict === 'unverified' ? 15 : stats.evidenceStrength, stats),
       headline: verdict === 'verified' ? 'Sources found support the claim.' : verdict === 'likely_false' ? 'Sources found contradict the claim.' : 'The available evidence is not enough to verify the claim.',
-      reasoning: `The analysis model was unavailable, so this result comes from the evidence tally alone: ${stats.tally.supports} supporting and ${stats.tally.contradicts} contradicting source(s) across ${stats.tally.distinctDomains} domain(s).`,
+      reasoning: `The analysis model was unavailable, so this result comes from the evidence tally alone: ${stats.tally.supports} supporting and ${stats.tally.contradicts} contradicting source(s) across ${stats.tally.distinctDomains} publisher(s) with directional evidence; ${stats.tally.context} contextual source(s) did not settle the claim.`,
       caveats: [...baseCaveats, 'The explanatory model was unavailable; no written analysis was produced.'],
       model: 'deterministic-fallback',
     })

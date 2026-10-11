@@ -8,6 +8,7 @@ import { describeError, log } from './logger'
 
 export class ModelUnavailableError extends Error {
   readonly attempts: Attempt[]
+  get quotaLimited() { return this.attempts.some(a => isQuotaOrUnavailable(a.lastError) && /429|quota|rate.?limit|resource.?exhausted/i.test(`${(a.lastError as Error)?.message ?? ''} ${statusOf(a.lastError)}`)) }
   constructor(message: string, attempts: Attempt[] = []) {
     super(message)
     this.name = 'ModelUnavailableError'
@@ -61,7 +62,7 @@ function providerFor(name: string): { name: string; model: string; call: (model:
   if ((name === 'xai' || name === 'grok' || name.startsWith('xai/') || name.startsWith('grok/')) && grokApiKey) return { name: 'grok', model: name === 'xai' || name === 'grok' ? (process.env.GROK_MODEL || process.env.XAI_MODEL || 'grok-4.7') : name.slice(name.startsWith('grok/') ? 5 : 4), call: createOpenAICompatible({ name: 'grok', baseURL: process.env.GROK_BASE_URL || process.env.XAI_BASE_URL || 'https://api.x.ai/v1', apiKey: grokApiKey, supportsStructuredOutputs: true }) }
   if ((name === 'cerebras' || name.startsWith('cerebras/')) && process.env.CEREBRAS_API_KEY) return { name: 'cerebras', model: name === 'cerebras' ? (process.env.CEREBRAS_MODEL || 'gpt-oss-120b') : name.slice(9), call: createCerebras({ apiKey: process.env.CEREBRAS_API_KEY }) }
   if (name === 'ollama' || name.startsWith('ollama/')) {
-    const model = name === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.2:3b') : name.slice('ollama/'.length)
+    const model = name === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen3:1.7b') : name.slice('ollama/'.length)
     // Ollama's OpenAI-compatible endpoint works with the current AI SDK model
     // interface; the legacy ollama-ai-provider package only implements v1.
     const baseURL = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\/$/, '')

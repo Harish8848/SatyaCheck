@@ -86,7 +86,7 @@ export async function createVerification(input: { inputType: InputType; inputTex
       throw error
     }
     await markFailed(request.id, error instanceof ModelUnavailableError
-      ? 'The analysis models were unavailable. The request was saved but could not be analysed; please try again in a few minutes.'
+      ? (error.quotaLimited ? 'The AI provider’s free-tier quota or rate limit was reached. No verdict was produced. Please try again after your quota resets.' : 'The analysis model is unavailable. Check the server API key and model settings, then try again.')
       : 'The request was saved, but analysis failed. Please try again.')
   }
   return (await getVerification(request.id))!

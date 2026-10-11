@@ -57,7 +57,8 @@ async function transcribeMedia(kind: 'image' | 'video' | 'audio', media: { bytes
     if (!speech) notes.push('Whisper was unavailable or could not transcribe this audio; no transcript was available to fact-check.')
     return speech ? `Speech in the audio: ${speech}` : ''
   }
-  const files = kind === 'video' && frames.length
+  const useFrames = kind === 'video' && frames.length > 0 && config.visionModels.some(model => model.startsWith('ollama'))
+  const files = useFrames
     ? frames.map((data) => ({ data: new Uint8Array(data), mediaType: 'image/jpeg' }))
     : [{ data: media.bytes, mediaType: media.mime }]
   try {
@@ -65,7 +66,7 @@ async function transcribeMedia(kind: 'image' | 'video' | 'audio', media: { bytes
       label: `${kind}-transcription`,
       schema: transcriptSchema,
       system: VISION_SYSTEM,
-      prompt: `Transcribe this ${kind}. ${kind === 'video' ? 'The attached images are chronological representative frames; transcribe visible text and describe the scene.' : 'Transcribe visible text.'}`,
+      prompt: `Transcribe this ${kind}. ${useFrames ? 'The attached images are chronological representative frames; transcribe visible text and describe the scene. Do not invent speech from still frames.' : 'Transcribe visible text and any audible speech from the attached file.'}`,
       models: [...config.visionModels],
       files,
     })
@@ -79,8 +80,8 @@ async function transcribeMedia(kind: 'image' | 'video' | 'audio', media: { bytes
     return parts.join('\n')
   } catch (error) {
     log('warn', 'media transcription unavailable', { kind, error: describeError(error) })
-    notes.push(`The ${kind} could not be read by the vision model, so only the accompanying text (if any) was checked.`)
-    return ''
+    notes.push(`The vision model could not read this ${kind}; only available local OCR, speech, and accompanying text were checked. Visual context remains unverified.`)
+    return [ocrText && `Text recognized by Tesseract OCR: ${ocrText}`, speech && `Speech in the ${kind}: ${speech}`].filter(Boolean).join('\n')
   }
 }
 

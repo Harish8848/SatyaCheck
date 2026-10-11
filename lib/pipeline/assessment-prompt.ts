@@ -19,6 +19,7 @@ export const ASSESSMENT_SYSTEM = [
   'Write a one-sentence headline a reader can act on, and reasoning that cites which sources drove the verdict.',
   'Do not say there is no evidence when directional supporting or contradicting evidence is listed. Distinguish direct headline/snippet evidence from retrieved article content, and state when an exact article quote was not independently verified.',
   'Do not call an event official or definitively confirmed unless primary or official-source evidence is supplied. When evidence is search-snippet-only, attribute the finding to the named reporting and make clear that the underlying article text was not retrieved.',
+  'For multiple claims, explain each separately. Do not transfer evidence for an event to a separate claim about what someone said. Use reports or snippets state, not confirmed, for snippet-only evidence.',
   'List genuine limitations as caveats.',
 ].join(' ')
 

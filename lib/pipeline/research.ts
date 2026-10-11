@@ -1,3 +1,4 @@
+import { searchFactChecks } from './fact-check'
 import { describeError, log } from '../core/logger'
 import { dedupeKey, fetchResearch, stripHtml, titleKey, toIso, USER_AGENT, type ResearchSource } from './research-parse'
 import { searchGdelt, searchGoogleNews } from './research-news'
@@ -70,6 +71,7 @@ async function searchCrossref(query: string): Promise<ResearchSource[]> {
 }
 
 const providers: ResearchProvider[] = [
+  ...(process.env.GOOGLE_FACT_CHECK_API_KEY ? [{ name: 'Google Fact Check', search: searchFactChecks }] : []),
   { name: 'GDELT', search: searchGdelt },
   { name: 'Google News', search: searchGoogleNews },
   { name: 'Wikipedia', search: searchWikipedia },
@@ -106,7 +108,7 @@ export async function searchAll(query: string): Promise<{ sources: ResearchSourc
       if (!urlId || seenUrls.has(urlId) || seenTitles.has(titleId)) continue
       seenUrls.add(urlId)
       seenTitles.add(titleId)
-      sources.push({ ...source, snippet: source.snippet.slice(0, MAX_SNIPPET) })
+      sources.push({ ...source, snippet: source.provider === 'Google Fact Check' ? source.snippet : source.snippet.slice(0, MAX_SNIPPET) })
     }
   }
   return { sources, failures }

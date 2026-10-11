@@ -13,7 +13,7 @@ export function tokenize(text: string): string[] {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((word) => word.length >= 3 && !STOPWORDS.has(word))
+    .filter((word) => (word.length >= 3 || /^\d+$/.test(word)) && !STOPWORDS.has(word))
 }
 
 /** 0-100 lexical overlap between the claim (plus entities) and a source's title/snippet. */
@@ -33,6 +33,7 @@ function normalizeQuery(text: string): string {
 export function planQueries(claim: Pick<ExtractedClaim, 'text' | 'entities' | 'verificationQuestion'>): string[] {
   const queries = [
     normalizeQuery(claim.text),
+    normalizeQuery([...claim.entities, ...tokenize(claim.text)].filter((v, i, all) => all.indexOf(v) === i).join(' ')),
     claim.entities.length >= 2 ? normalizeQuery(claim.entities.slice(0, 5).join(' ')) : normalizeQuery(claim.verificationQuestion),
   ].filter(Boolean)
   const seen = new Set<string>()

@@ -22,13 +22,15 @@ const PRIMARY_DOMAINS = [
   /(^|\.)worldbank\.org$/,
   /(^|\.)imf\.org$/,
   /(^|\.)nic\.in$/,
+  /(^|\.)icc-cricket\.com$/,
+  /(^|\.)cricketnepal\.org\.np$/,
 ]
 
 const REPUTABLE_DOMAINS = [
   'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk', 'npr.org', 'pbs.org', 'nytimes.com', 'washingtonpost.com',
   'wsj.com', 'theguardian.com', 'ft.com', 'economist.com', 'bloomberg.com', 'aljazeera.com', 'dw.com', 'france24.com',
   'abc.net.au', 'cbc.ca', 'thehindu.com', 'kathmandupost.com', 'afp.com', 'factcheck.afp.com', 'factcheck.org',
-  'espn.com', 'sports.yahoo.com', 'yahoo.com', 'dailysabah.com',
+  'espncricinfo.com', 'cricbuzz.com', 'espn.com', 'sports.yahoo.com', 'yahoo.com', 'dailysabah.com',
   'snopes.com', 'politifact.com', 'fullfact.org', 'boomlive.in', 'altnews.in', 'nature.com', 'science.org',
   'thelancet.com', 'nejm.org',
 ]
@@ -72,7 +74,7 @@ export function classifySource(input: { url: string; publisher?: string }): Sour
   let tier: SourceTier = 'unverified'
   if (!aggregated && PRIMARY_DOMAINS.some((pattern) => pattern.test(domain))) tier = 'primary'
   else if (!aggregated && REPUTABLE_DOMAINS.some((known) => domain === known || domain.endsWith(`.${known}`))) tier = 'reputable'
-  else if (input.publisher && publisherMatches(input.publisher)) tier = 'reputable'
+  else if (aggregated && input.publisher && publisherMatches(input.publisher)) tier = 'reputable'
   else if (!aggregated && REFERENCE_DOMAINS.some((pattern) => pattern.test(domain))) tier = 'reference'
 
   return { tier, authority: tierAuthority[tier], domain: domain || 'unknown', publisher }

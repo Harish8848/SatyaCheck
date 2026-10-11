@@ -9,12 +9,10 @@ function intEnv(name: string, fallback: number): number {
 
 export const config = {
   /** Models tried in order. First entry is the primary analyst. */
-  // Local-first by default; cloud providers remain an explicit fallback.
-  analystModels: (process.env.AI_PROVIDER_ORDER?.split(',').map((v) => v.trim()).filter(Boolean) ?? ['ollama', 'gemini']),
-  /** Cheaper model used for high-volume, low-judgement work (query planning). */
-  plannerModel: 'gemini-3.5-flash-lite',
+  // Cloud inference avoids loading large models on student laptops; local use is opt-in.
+  analystModels: (process.env.AI_PROVIDER_ORDER?.split(',').map((v) => v.trim()).filter(Boolean) ?? ['gemini']),
   /** Vision / multimodal model for media inspection. */
-  visionModels: (process.env.VISION_PROVIDER_ORDER?.split(',').map((v) => v.trim()).filter(Boolean) ?? ['ollama/qwen3-vl:8b', 'gemini']),
+  visionModels: (process.env.VISION_PROVIDER_ORDER?.split(',').map((v) => v.trim()).filter(Boolean) ?? ['gemini']),
 
   /** Per-request timeouts for third-party research providers. */
   providerTimeoutMs: intEnv('RESEARCH_PROVIDER_TIMEOUT_MS', 5000),
@@ -27,7 +25,7 @@ export const config = {
   /** Maximum claims analysed per submission; the rest are listed but not checked. */
   maxClaims: intEnv('SATYACHECK_MAX_CLAIMS', 4),
   /** Search queries issued per claim. */
-  queriesPerClaim: intEnv('SATYACHECK_QUERIES_PER_CLAIM', 1),
+  queriesPerClaim: intEnv('SATYACHECK_QUERIES_PER_CLAIM', 2),
 
   /** Upload ceilings, enforced before any parsing happens. */
   maxImageBytes: intEnv('SATYACHECK_MAX_IMAGE_BYTES', 12 * 1024 * 1024),
