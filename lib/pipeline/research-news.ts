@@ -2,27 +2,7 @@ import { fetchResearch, firstTag, splitPublisher, toIso, USER_AGENT, type Resear
 
 /** News search providers. Return raw candidates only; no relation judgement happens here. */
 
-export async function searchGdelt(query: string): Promise<ResearchSource[]> {
-  const response = await fetchResearch(
-    `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=8&format=json`,
-    { headers: { Accept: 'application/json' } },
-  )
-  if (!response.ok) throw new Error(`GDELT returned ${response.status}`)
-  // GDELT answers rejected queries with a plain-text 200; that is "no results", not an outage.
-  if (!response.headers.get('content-type')?.includes('application/json')) return []
-  const data = (await response.json()) as { articles?: Array<{ title?: string; url?: string; seendate?: string; domain?: string }> }
-  return (data.articles ?? [])
-    .filter((article) => article.title && article.url)
-    .map((article) => ({
-      title: article.title!,
-      url: article.url!,
-      snippet: article.title!,
-      evidenceBasis: 'search_snippet',
-      publisher: article.domain,
-      publishedAt: toIso(article.seendate),
-      provider: 'GDELT',
-    }))
-}
+export { searchGdelt } from './gdelt'
 
 export async function searchGoogleNews(query: string): Promise<ResearchSource[]> {
   const params = new URLSearchParams({ q: query, hl: 'en-US', gl: 'US', ceid: 'US:en' })

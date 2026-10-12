@@ -1,5 +1,6 @@
 import { searchFactChecks } from './fact-check'
 import { describeError, log } from '../core/logger'
+import { ResearchProviderError } from '../core/research-error'
 import { dedupeKey, fetchResearch, stripHtml, titleKey, toIso, USER_AGENT, type ResearchSource } from './research-parse'
 import { searchGdelt, searchGoogleNews } from './research-news'
 
@@ -95,7 +96,7 @@ export async function searchAll(query: string): Promise<{ sources: ResearchSourc
   const failures: string[] = []
   const grouped = settled.map((result, index) => {
     if (result.status === 'fulfilled') return result.value
-    failures.push(`${providers[index].name}: ${describeError(result.reason)}`)
+    failures.push(`${providers[index].name}: ${result.reason instanceof ResearchProviderError ? result.reason.publicMessage : describeError(result.reason)}`)
     log('warn', 'research provider failed', { provider: providers[index].name, error: describeError(result.reason) })
     return [] as ResearchSource[]
   })
