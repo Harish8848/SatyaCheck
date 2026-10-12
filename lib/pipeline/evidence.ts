@@ -1,5 +1,7 @@
 import { generateStructured } from '../core/model'
+import { config } from '../core/config'
 import { describeError, log } from '../core/logger'
+import { ModelUnavailableError } from '../core/model'
 import type { EvidenceItem, ExtractedClaim } from '../core/types'
 import { planQueries, relevanceScore } from './evidence-rank'
 import { JUDGE_SYSTEM, judgementSchema, toItem, validateJudgementIndices, type Candidate, type Judgement } from './evidence-judge'
@@ -17,7 +19,7 @@ import { classifySource } from './sources'
 const CANDIDATES_PER_CLAIM = 8
 const MIN_RELEVANCE = 15
 
-export type ClaimEvidence = { items: EvidenceItem[]; notes: string[]; queries: string[]; model?: string }
+export type ClaimEvidence = { items: EvidenceItem[]; notes: string[]; queries: string[]; model?: string; failed?: boolean }
 
 const short = (text: string) => text.slice(0, 80)
 
@@ -37,6 +39,12 @@ async function rankCandidates(claim: ExtractedClaim, queries: string[], linkedSo
       if (seen.has(key)) continue
       seen.add(key)
       const relevance = relevanceScore(claim, source)
+      const entityTokens = claim.entities.flatMap((entity) => entity.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 3))
+      const sourceText = `${source.title} ${source.snippet}`.toLowerCase()
+      // Generic search matches (e.g. papers about “paused” or “climate”) are
+      // not useful for an entity-specific news claim. Keep a candidate only
+      // when at least one extracted entity is visibly present.
+      if (entityTokens.length >= 1 && !entityTokens.some((token) => sourceText.includes(token))) continue
       if (relevance < MIN_RELEVANCE) continue
       candidates.push({ source, cls: classifySource({ url: source.url, publisher: source.publisher }), relevance })
     }
@@ -101,12 +109,20 @@ export async function gatherEvidence(claim: ExtractedClaim, linkedSources: strin
       schema: judgementSchema,
       system: JUDGE_SYSTEM,
       prompt: `Claim: ${claim.text}\nQuestion to answer: ${claim.verificationQuestion}\n\nSources:\n${sourceBlock}`,
+      // A timed-out evidence judge must fail over once, not retry the same
+      // expensive prompt and block the entire verification job.
+      maxRetriesPerModel: 0,
+      timeoutMs: config.evidenceJudgementTimeoutMs,
     })
     model = result.model
     judged = validateJudgementIndices(result.output.judgements, top.length)
   } catch (error) {
     log('warn', 'evidence judgement unavailable', { claim: claim.id, error: describeError(error) })
-    notes.push(`Source judgement was unavailable for “${short(claim.text)}”; sources are listed as context only.`)
+    const reason = error instanceof ModelUnavailableError
+      ? error.attempts.map((attempt) => `${attempt.modelId}:${attempt.lastError instanceof Error ? attempt.lastError.name : 'provider_error'}`).join(', ')
+      : describeError(error)
+    log('error', 'evidence judgement failed', { claim: claim.id, reason })
+    notes.push(`Verification incomplete for “${short(claim.text)}”: source evidence could not be evaluated (${reason || 'unknown failure'}). Retrieved sources are not admissible as support or contradiction.`)
   }
 
   const items: EvidenceItem[] = []
@@ -118,5 +134,5 @@ export async function gatherEvidence(claim: ExtractedClaim, linkedSources: strin
   if (items.some((item) => item.relation !== 'context' && item.evidenceBasis === 'search_snippet')) {
     notes.push('Some directional evidence comes from search-result headlines or snippets; the linked article text was not retrieved, so those statements are not independently verified article quotes.')
   }
-  return { items, notes, queries, model }
+  return { items, notes, queries, model, failed: judged.size === 0 }
 }

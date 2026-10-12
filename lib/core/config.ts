@@ -18,6 +18,9 @@ export const config = {
   providerTimeoutMs: intEnv('RESEARCH_PROVIDER_TIMEOUT_MS', 5000),
   /** Give local inference enough time for cold starts and multimodal inputs. */
   modelTimeoutMs: intEnv('AI_PROVIDER_TIMEOUT_MS', 30_000),
+  /** Evidence classification is bounded separately so a slow local fallback
+   * cannot hold the whole verification job for multiple retry windows. */
+  evidenceJudgementTimeoutMs: intEnv('EVIDENCE_JUDGEMENT_TIMEOUT_MS', 20_000),
   /** Cap on how much page text we hand to the model. */
   maxContextChars: intEnv('SATYACHECK_MAX_CONTEXT_CHARS', 120_000),
   /** Research sources retained after ranking. */

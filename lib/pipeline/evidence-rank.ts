@@ -33,8 +33,8 @@ function normalizeQuery(text: string): string {
 export function planQueries(claim: Pick<ExtractedClaim, 'text' | 'entities' | 'verificationQuestion'>): string[] {
   const queries = [
     normalizeQuery(claim.text),
-    normalizeQuery(`${claim.text.slice(0, 200)} disputed evidence fact check`),
-    claim.entities.length >= 2 ? normalizeQuery(claim.entities.slice(0, 5).join(' ')) : normalizeQuery(claim.verificationQuestion),
+    normalizeQuery(`${claim.entities.slice(0, 5).join(' ')} ${claim.text.slice(0, 180)}`),
+    normalizeQuery(`${claim.entities.slice(0, 5).join(' ')} ${claim.verificationQuestion}`),
   ].filter(Boolean)
   const seen = new Set<string>()
   return queries

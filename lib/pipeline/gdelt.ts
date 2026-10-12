@@ -93,8 +93,10 @@ export function createGdeltSearch(deps: {
         // Pause briefly after timeouts/outages too, so queued calls do not repeat
         // a known failure. A provider's Retry-After always takes precedence.
         cooldownUntil = Math.max(cooldownUntil, now() + 15_000)
-        if (!(error instanceof ResearchProviderError) && (error as { name?: string }).name === 'TimeoutError') {
-          throw new ResearchProviderError('Could not connect to GDELT before the 12-second timeout. GDELT was skipped; other research providers are still used.')
+        if (!(error instanceof ResearchProviderError)) {
+          const name = (error as { name?: string }).name ?? 'UnknownError'
+          const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code
+          throw new ResearchProviderError(`GDELT request failed (${name}${code ? `, ${code}` : ''}); other research providers are still used.`)
         }
         throw error
       } finally {

@@ -96,6 +96,7 @@ export async function generateStructured<T>(options: {
   maxRetriesPerModel?: number
   /** Hard cap across all providers, used to bound interactive media reads. */
   maxTotalAttempts?: number
+  timeoutMs?: number
 }): Promise<{ output: T; model: string; attempts: Attempt[] }> {
   const models = options.models ?? config.analystModels
   const attempts: Attempt[] = []
@@ -128,7 +129,7 @@ export async function generateStructured<T>(options: {
             },
           ],
           maxRetries: 0,
-          abortSignal: AbortSignal.timeout(config.modelTimeoutMs),
+          abortSignal: AbortSignal.timeout(options.timeoutMs ?? config.modelTimeoutMs),
           temperature: 0,
         })
         attempts.push({ modelId, tries: attempt })

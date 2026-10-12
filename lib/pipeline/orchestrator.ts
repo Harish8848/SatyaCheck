@@ -124,7 +124,7 @@ export async function runPipeline(submission: Submission, progress?: Progress, p
     await tracker.run('fact_checking', async () => {
       const results = await mapLimit(toCheck, 1, async (claim) => { try { return await research(claim, ingested.linkedSources, detail => progress?.({ stage: 'fact_checking', state: 'running', detail })) } catch { return { items: [], notes: [`Research failed for ${claim.id}; this claim remains unresolved.`], failed: true } } })
       results.forEach((result, i) => {
-        if (!('failed' in result)) checkedIds.push(toCheck[i].id)
+        if (!result.failed) checkedIds.push(toCheck[i].id)
         evidence.push(...result.items)
         notes.push(...result.notes)
       })
