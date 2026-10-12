@@ -47,3 +47,17 @@ test('progress parser handles split UTF-8 chunks and refuses incomplete results'
 test('provider failures do not leak uploaded text or credentials through logs', () => {
  assert.equal(describeError(new Error('secret API key plus entire uploaded transcript')), 'Error')
 })
+
+ test('review drafts survive module reloads without extending their expiry', async () => {
+ const token = saveDraft({ ingested: { inputType: 'text', text: 'There were 700 attendees.', sourceLabel: 'text', extractedChars: 25, truncated: false, reviewRequired: true, notes: [] }, claims: [] }, 'reload-owner')
+ const reloaded = await import(`../lib/pipeline/review.ts?reload=${Date.now()}`)
+ try {
+  assert.equal(reloaded.readDraft(token, 'reload-owner', [{ text: 'There were 700 attendees.', claimType: 'factual' }]).claims.length, 1)
+  assert.throws(() => reloaded.readDraft(token, 'another-owner', []), /expired/)
+  const originalNow = Date.now
+  try {
+   Date.now = () => originalNow() + 10 * 60_000 + 1
+   assert.throws(() => reloaded.readDraft(token, 'reload-owner', []), /expired/)
+  } finally { Date.now = originalNow }
+ } finally { deleteDraft(token) }
+})

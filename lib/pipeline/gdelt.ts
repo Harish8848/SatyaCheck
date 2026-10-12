@@ -55,7 +55,10 @@ export function createGdeltSearch(deps: {
         const params = new URLSearchParams({ query: key, mode: 'artlist', maxrecords: '8', format: 'json' })
         const response = await request(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
           headers: { Accept: 'application/json' }, redirect: 'error',
-          signal: AbortSignal.timeout(config.providerTimeoutMs),
+          // GDELT can take longer than the other research providers to accept a
+          // query. Give it a little more time, while still failing fast enough
+          // for the remaining providers to return a useful result.
+          signal: AbortSignal.timeout(Math.max(config.providerTimeoutMs, 12_000)),
         })
         if (response.status === 429) {
           cooldownUntil = now() + Math.max(COOLDOWN_MS, retryAfterMs(response.headers.get('retry-after'), now()))
@@ -90,6 +93,9 @@ export function createGdeltSearch(deps: {
         // Pause briefly after timeouts/outages too, so queued calls do not repeat
         // a known failure. A provider's Retry-After always takes precedence.
         cooldownUntil = Math.max(cooldownUntil, now() + 15_000)
+        if (!(error instanceof ResearchProviderError) && (error as { name?: string }).name === 'TimeoutError') {
+          throw new ResearchProviderError('Could not connect to GDELT before the 12-second timeout. GDELT was skipped; other research providers are still used.')
+        }
         throw error
       } finally {
         // Spacing from completion also avoids overlapping slow server requests.

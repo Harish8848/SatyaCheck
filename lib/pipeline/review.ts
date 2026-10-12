@@ -8,10 +8,21 @@ import { analyzeImage, analyzeVideo } from './media-integrity'
 import type { Progress } from './orchestrator'
 
 export type PreparedInput = { ingested: IngestedInput; claims: ExtractedClaim[]; aiSignal?: AiContentSignal }
-const drafts = new Map<string, { prepared: PreparedInput; owner: string; expires: number }>()
+type Draft = { prepared: PreparedInput; owner: string; expires: number }
+// Next.js re-evaluates server modules during development. Keep the bounded
+// store on the process so an open review survives hot reloads. Full process
+// restarts and separate instances still require a shared persistent store.
+const reviewProcess = globalThis as typeof globalThis & {
+  __satyaReviewDrafts?: Map<string, Draft>
+  __satyaReviewCleanup?: ReturnType<typeof setInterval>
+}
+const drafts = reviewProcess.__satyaReviewDrafts ??= new Map<string, Draft>()
 const TTL = 10 * 60_000
 function cleanup() { for (const [id, draft] of drafts) if (draft.expires <= Date.now()) drafts.delete(id) }
-const timer = setInterval(cleanup, 60_000); timer.unref()
+if (!reviewProcess.__satyaReviewCleanup) {
+  reviewProcess.__satyaReviewCleanup = setInterval(cleanup, 60_000)
+  reviewProcess.__satyaReviewCleanup.unref()
+}
 export const reviewedClaimsSchema = z.array(z.object({ text: z.string().trim().min(8).max(600), claimType: z.enum(['factual', 'opinion', 'satire', 'prediction', 'unverifiable']) })).max(12)
 
 export function saveDraft(prepared: PreparedInput, owner: string): string {

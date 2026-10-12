@@ -25,7 +25,8 @@ export async function assess(input: AssessInput): Promise<Assessment> {
     ...partial,
     ...stats,
     ...(multiClaim ? {
-      ...(unresolved ? { verdict: 'unverified' as const, confidence: Math.min(partial.confidence, 15) } : {}),
+      // An unresolved sibling claim must not erase directional evidence for a
+      // supported claim. Findings remain explicit per claim below.
       headline: unresolved ? `${unresolved} of ${perClaim.length} factual claims remain unverified; see the separate findings below.` : 'Evidence findings are listed separately for each factual claim.',
       reasoning: claimNarrative,
     } : {}),

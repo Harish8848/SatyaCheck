@@ -49,15 +49,13 @@ export const JUDGE_SYSTEM = [
 
 export type Candidate = { source: ResearchSource; cls: SourceClass; relevance: number }
 
-const speculativeLanguage = /\b(?:may|might|could|possibly|potentially|alleged(?:ly)?|unconfirmed|rumou?rs?|speculation|whether)\b|\?\s*$/i
-
 export function toItem(claim: ExtractedClaim, candidate: Candidate, judgement: Judgement | undefined, judgedAny: boolean, ordinal: number): EvidenceItem {
   let relation: EvidenceRelation = judgement?.relation === 'supports' || judgement?.relation === 'contradicts' ? judgement.relation : 'context'
   let reasoning = judgement?.reasoning ?? (judgedAny ? 'Not addressed by the judgement step; treated as context.' : 'Relevance judgement unavailable; listed as context only.')
-  if (relation === 'supports' && speculativeLanguage.test(`${candidate.source.title} ${candidate.source.snippet}`)) {
-    relation = 'context'
-    reasoning = `${reasoning} (The source uses speculative or uncertain language and does not assert the claim as established.)`
-  }
+  // Uncertainty must be evaluated against the proposition being checked. A
+  // source may say “unclear whether the facility can be restored” after
+  // directly reporting the strike/fire. Do not erase a valid judgement using a
+  // document-wide speculative-language regex.
   if (/(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com)$/.test(candidate.cls.domain)) { relation = 'context'; reasoning = 'This social assertion is not corroboration of its underlying claim. Account ownership and badges were not checked.' }
   let quote: string | undefined
   const sourceText = `${candidate.source.title} ${candidate.source.snippet}`

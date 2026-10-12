@@ -80,7 +80,10 @@ export async function gatherEvidence(claim: ExtractedClaim, linkedSources: strin
       const page = await extractPage(candidate.source.url)
       if (page.text.length < 200) return
       candidate.source = { ...candidate.source, retrievedAt: new Date().toISOString(), publishedAt: toIso(page.publishedAt) || candidate.source.publishedAt, url: page.finalUrl, snippet: page.text.slice(0, 8000), evidenceBasis: 'article_content' }
-      candidate.cls = classifySource({ url: page.finalUrl })
+      // Keep the publisher discovered by search when the article is hosted or
+      // syndicated on a partner domain (for example Reuters reporting on a
+      // feed site). URL-only reclassification loses source identity.
+      candidate.cls = classifySource({ url: page.finalUrl, publisher: candidate.cls.publisher })
     } catch {
       notes.push(`Could not read the full page from ${candidate.cls.domain}; only its search snippet was assessed.`)
     }
