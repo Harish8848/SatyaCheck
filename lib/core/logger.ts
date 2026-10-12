@@ -16,11 +16,10 @@ export function log(level: Level, message: string, fields: Record<string, unknow
   else console.log(line)
 }
 
+/** Provider errors can embed prompts, uploads, URLs and keys. Keep diagnostics structural. */
 export function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    const cause = error.cause as { code?: string } | undefined
-    const label = error.name && error.name !== 'Error' ? `${error.name}: ` : ''
-    return `${label}${error.message}${cause?.code ? ` (${cause.code})` : ''}`
-  }
-  return String(error)
+  if (!(error instanceof Error)) return 'Unknown processing error'
+  const status = (error as Error & { statusCode?: number }).statusCode
+  const code = (error.cause as { code?: string } | undefined)?.code
+  return `${error.name || 'Error'}${Number.isFinite(status) ? ` (HTTP ${status})` : ''}${code && /^[A-Z_0-9]+$/.test(code) ? ` (${code})` : ''}`
 }

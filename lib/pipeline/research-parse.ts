@@ -4,6 +4,7 @@ import type { EvidenceBasis } from '../core/types'
 /** Shared types and parsing helpers for the web research providers. */
 
 export type ResearchSource = {
+  retrievedAt?: string
   title: string
   url: string
   snippet: string
@@ -25,11 +26,11 @@ export function decodeXmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
     if (/^#x/i.test(entity)) {
       const code = Number.parseInt(entity.slice(2), 16)
-      return Number.isNaN(code) ? match : String.fromCodePoint(code)
+      return !Number.isFinite(code) || code < 0 || code > 0x10ffff ? match : String.fromCodePoint(code)
     }
     if (entity.startsWith('#')) {
       const code = Number.parseInt(entity.slice(1), 10)
-      return Number.isNaN(code) ? match : String.fromCodePoint(code)
+      return !Number.isFinite(code) || code < 0 || code > 0x10ffff ? match : String.fromCodePoint(code)
     }
     return named[entity.toLowerCase()] ?? match
   })
@@ -76,7 +77,7 @@ export function titleKey(title: string): string {
 export async function fetchResearch(url: string, init: RequestInit): Promise<Response> {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(config.providerTimeoutMs) })
+      const response = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(config.providerTimeoutMs) })
       if (response.status >= 500 && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 200))
         continue

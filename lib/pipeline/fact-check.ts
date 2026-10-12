@@ -23,6 +23,8 @@ export function parseFactChecks(data: ClaimSearchResponse): ResearchSource[] {
 }
 
 const cache = new Map<string, { expires: number; sources: ResearchSource[] }>()
+const cleanupTimer = setInterval(() => { for (const [key, value] of cache) if (value.expires <= Date.now()) cache.delete(key) }, 60_000)
+cleanupTimer.unref()
 export async function searchFactChecks(query: string): Promise<ResearchSource[]> {
   const key = process.env.GOOGLE_FACT_CHECK_API_KEY
   if (!key) return []
@@ -33,7 +35,7 @@ export async function searchFactChecks(query: string): Promise<ResearchSource[]>
   const response = await fetchResearch(`https://factchecktools.googleapis.com/v1alpha1/claims:search?${params}`, {
     headers: { 'X-Goog-Api-Key': key, Accept: 'application/json' },
   })
-  const sources = parseFactChecks(await response.json())
+  const sources = parseFactChecks(await response.json()).map(s => ({ ...s, retrievedAt: new Date().toISOString() }))
   if (cache.size >= 100) cache.delete(cache.keys().next().value!)
   cache.set(query, { expires: Date.now() + 15 * 60_000, sources })
   return sources

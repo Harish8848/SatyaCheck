@@ -1,131 +1,77 @@
+import { boundedRequest } from '@/lib/core/request-body'
 import { NextResponse } from 'next/server'
-import { config } from '@/lib/core/config'
+import { z } from 'zod'
 import { UserFacingError } from '@/lib/core/errors'
+import { ModelUnavailableError } from '@/lib/core/model'
 import { clientKey, rateLimit } from '@/lib/core/rate-limit'
-import { createVerification, inputTypes, listVerifications, type InputType } from '@/lib/verification'
+import { createVerification, listVerifications } from '@/lib/verification'
+import { deleteDraft, prepareReview, readDraft } from '@/lib/pipeline/review'
+import type { Submission } from '@/lib/pipeline/ingest-run'
+import type { Progress } from '@/lib/pipeline/orchestrator'
+import { validateUpload } from '@/lib/media/validate-upload'
 
 export const runtime = 'nodejs'
-/** The pipeline makes several model and network calls; allow it time on hosts that honour this. */
-export const maxDuration = 120
-
-const MAX_TEXT_CHARS = 200_000
-
-function failure(error: unknown) {
-  if (error instanceof UserFacingError) return NextResponse.json({ error: error.message }, { status: 422 })
-  console.error('Failed to create verification:', error)
-  return NextResponse.json({ error: 'Unable to save verification.' }, { status: 500 })
+export const maxDuration = 300
+const inputSchema = z.object({ inputType: z.enum(['text', 'url', 'image', 'video', 'audio']), inputText: z.string().trim().max(200_000).optional(), sourceName: z.string().max(200).optional(), action: z.enum(['preview', 'assess']).optional() })
+function errorMessage(error: unknown) {
+  if (error instanceof UserFacingError) return error.message
+  if (error instanceof ModelUnavailableError) return error.quotaLimited ? 'Provider quota reached. Please retry after your quota resets.' : 'Setup required: the analysis model is unavailable. Check server API credentials and model configuration.'
+  return 'Unable to complete this check. The server or database may be unavailable; try again.'
 }
-
-function isInputType(value: unknown): value is InputType {
-  return typeof value === 'string' && inputTypes.includes(value as InputType)
-}
-
 export async function GET() {
-  try {
-    return NextResponse.json({ data: await listVerifications() })
-  } catch (error) {
-    console.error('Failed to list verifications:', error)
-    return NextResponse.json({ error: 'Unable to load verification history.' }, { status: 500 })
-  }
+  try { return NextResponse.json({ data: await listVerifications() }) }
+  catch (error) { return NextResponse.json({ error: errorMessage(error) }, { status: 503 }) }
 }
 
-const mediaMimePrefix: Record<'image' | 'video' | 'audio', string> = { image: 'image/', video: 'video/', audio: 'audio/' }
-
-/** Handles multipart uploads: fields inputType / inputText plus a `file` part. Size is enforced before any parsing. */
-async function handleMultipart(request: Request) {
-  let form: FormData
+export async function POST(original: Request) {
+  const owner = clientKey(original), limit = rateLimit(owner)
+  if (!limit.ok) return NextResponse.json({ error: 'Too many requests. Please wait and try again.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
   try {
-    form = await request.formData()
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid multipart form data.' }, { status: 400 })
-  }
-
-  const inputType = form.get('inputType')
-  if (inputType !== 'image' && inputType !== 'video' && inputType !== 'audio') {
-    return NextResponse.json({ error: 'File uploads are only supported for image, video, or audio input.' }, { status: 400 })
-  }
-  const file = form.get('file')
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: `Attach the ${inputType} file to check.` }, { status: 400 })
-  }
-  if (!file.type.startsWith(mediaMimePrefix[inputType])) {
-    return NextResponse.json({ error: `The attached file is not a ${inputType}.` }, { status: 415 })
-  }
-  const ceiling = inputType === 'video' || inputType === 'audio' ? config.maxVideoBytes : config.maxImageBytes
-  if (file.size > ceiling) {
-    return NextResponse.json({ error: `The ${inputType} is ${(file.size / 1_048_576).toFixed(1)} MB; the limit is ${(ceiling / 1_048_576).toFixed(0)} MB.` }, { status: 413 })
-  }
-  const rawText = form.get('inputText')
-  if (rawText !== null && typeof rawText !== 'string') {
-    return NextResponse.json({ error: 'inputText must be a string.' }, { status: 400 })
-  }
-
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    const verification = await createVerification({
-      inputType,
-      inputText: rawText?.trim() || undefined,
-      sourceName: file.name.slice(0, 200),
-      media: { bytes, mime: file.type },
+    const request = await boundedRequest(original)
+    let submission: Submission, action: 'preview' | 'assess' | undefined, token: string | undefined
+    let prepared: ReturnType<typeof readDraft> | undefined
+    if (request.headers.get('content-type')?.includes('multipart/form-data')) {
+      const form = await request.formData()
+      const fields = inputSchema.parse({ inputType: form.get('inputType'), inputText: form.get('inputText') ?? undefined, action: form.get('action') ?? undefined })
+      if (!['image', 'video', 'audio'].includes(fields.inputType)) throw new UserFacingError('Only media inputs accept file uploads.')
+      const file = form.get('file')
+      if (!(file instanceof File)) throw new UserFacingError('Attach a media file.')
+      const media = { bytes: new Uint8Array(await file.arrayBuffer()), mime: file.type }
+      validateUpload(fields.inputType as 'image' | 'video' | 'audio', media)
+      submission = { ...fields, sourceName: file.name.slice(0, 200), media }; action = fields.action
+    } else {
+      const body = await request.json()
+      if (typeof body?.token === 'string') {
+        token = body.token
+        prepared = readDraft(body.token, owner, body.claims)
+        submission = { inputType: prepared.ingested.inputType, sourceName: prepared.ingested.sourceLabel }
+        action = 'assess'
+      } else {
+        const fields = inputSchema.parse(body)
+        if (!fields.inputText) throw new UserFacingError('Provide text, a public URL, or a media upload.')
+        submission = fields; action = fields.action
+      }
+    }
+    const run = async (progress?: Progress) => {
+      if (action === 'preview') return { review: await prepareReview(submission, owner, progress) }
+      const data = await createVerification(submission, progress, prepared)
+      if (token && data.status === 'completed') deleteDraft(token)
+      return { data }
+    }
+    if (!original.headers.get('accept')?.includes('application/x-ndjson')) return NextResponse.json(await run(), { status: 201 })
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        let closed = false
+        const send = (event: unknown) => { if (!closed) try { controller.enqueue(encoder.encode(JSON.stringify(event) + '\n')) } catch { closed = true } }
+        try { send(await run(stage => send({ progress: stage }))) }
+        catch (error) { send({ error: errorMessage(error) }) }
+        finally { if (!closed) { try { controller.close() } catch { /* Client disconnected. */ } } }
+      },
     })
-    return NextResponse.json({ data: verification }, { status: 201 })
+    return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' } })
   } catch (error) {
-    return failure(error)
-  }
-}
-
-export async function POST(request: Request) {
-  const limit = rateLimit(clientKey(request))
-  if (!limit.ok) {
-    return NextResponse.json({ error: 'Too many verification requests. Please wait and try again.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
-  }
-  if (request.headers.get('content-type')?.toLowerCase().startsWith('multipart/form-data')) {
-    return handleMultipart(request)
-  }
-
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 })
-  }
-
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Request body must be an object.' }, { status: 400 })
-  }
-
-  const payload = body as Record<string, unknown>
-  const inputType = payload.inputType
-  const inputText = payload.inputText
-  const sourceName = payload.sourceName
-
-  if (!isInputType(inputType)) {
-    return NextResponse.json({ error: 'inputType must be text, image, video, audio, or url.' }, { status: 400 })
-  }
-  if (inputText !== undefined && typeof inputText !== 'string') {
-    return NextResponse.json({ error: 'inputText must be a string.' }, { status: 400 })
-  }
-  if (sourceName !== undefined && typeof sourceName !== 'string') {
-    return NextResponse.json({ error: 'sourceName must be a string.' }, { status: 400 })
-  }
-  if ((inputType === 'image' || inputType === 'video' || inputType === 'audio') && !inputText?.trim()) {
-    return NextResponse.json({ error: `Upload the ${inputType} file as multipart form data, or describe it in inputText.` }, { status: 400 })
-  }
-  if (!inputText?.trim()) {
-    return NextResponse.json({ error: 'Provide inputText.' }, { status: 400 })
-  }
-  if (inputText.length > MAX_TEXT_CHARS) {
-    return NextResponse.json({ error: `inputText is limited to ${MAX_TEXT_CHARS.toLocaleString()} characters.` }, { status: 413 })
-  }
-
-  try {
-    const verification = await createVerification({
-      inputType,
-      inputText: inputText.trim(),
-      sourceName: sourceName?.trim().slice(0, 200),
-    })
-    return NextResponse.json({ data: verification }, { status: 201 })
-  } catch (error) {
-    return failure(error)
+    const message = error instanceof z.ZodError || error instanceof SyntaxError ? 'Invalid input. Check the type, text length, and selected file.' : errorMessage(error)
+    return NextResponse.json({ error: message }, { status: error instanceof ModelUnavailableError ? 503 : 422 })
   }
 }

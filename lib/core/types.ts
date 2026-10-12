@@ -91,6 +91,12 @@ export const sourceTiers = ['primary', 'reputable', 'reference', 'unverified'] a
 export type SourceTier = (typeof sourceTiers)[number]
 
 export type EvidenceItem = {
+  retrievedAt?: string
+  substantiation?: 'not_established'
+  sourceGroup?: string
+  contextMatch?: 'matched' | 'mismatched' | 'unknown'
+  independentReporting?: boolean
+  qualityBasis?: string
   id: string
   /** The extracted claim this source was judged against. */
   claimId?: string
@@ -131,6 +137,7 @@ export type StageResult = {
 }
 
 export type Assessment = {
+  evidenceReport?: import('./evidence-report').EvidenceReport
   verdict: Verdict
   confidence: number
   /** Short headline answer a reader can trust or refute. */
@@ -147,11 +154,14 @@ export type Assessment = {
 }
 
 export type IngestedInput = {
+  processingIncomplete?: boolean
+  reviewRequired?: boolean
   inputType: InputType
   text: string
   /** Original submitted text/URL before extraction. */
   sourceLabel: string
   url?: string
+  linkedSources?: string[]
   pageTitle?: string
   pageAuthor?: string
   pagePublishedAt?: string

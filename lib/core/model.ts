@@ -94,6 +94,8 @@ export async function generateStructured<T>(options: {
   models?: string[]
   files?: { data: Uint8Array | string; mediaType: string }[]
   maxRetriesPerModel?: number
+  /** Hard cap across all providers, used to bound interactive media reads. */
+  maxTotalAttempts?: number
 }): Promise<{ output: T; model: string; attempts: Attempt[] }> {
   const models = options.models ?? config.analystModels
   const attempts: Attempt[] = []
@@ -109,6 +111,7 @@ export async function generateStructured<T>(options: {
     if (!provider) continue
     const modelId = `${provider.name}/${provider.model}`
     for (let attempt = 1; attempt <= overloadRetries; attempt += 1) {
+      if (options.maxTotalAttempts !== undefined && attempts.length >= options.maxTotalAttempts) break
       const started = Date.now()
       try {
         const result = await generateText({
@@ -130,7 +133,7 @@ export async function generateStructured<T>(options: {
         })
         attempts.push({ modelId, tries: attempt })
         log('info', 'model call succeeded', { label: options.label, model: modelId, attempt, durationMs: Date.now() - started })
-        return { output: result.output as T, model: modelId, attempts }
+        return { output: options.schema.parse(result.output), model: modelId, attempts }
       } catch (error) {
         attempts.push({ modelId, tries: attempt, lastError: error })
         log('warn', 'model call failed', { label: options.label, model: modelId, attempt, durationMs: Date.now() - started, error: describeError(error) })
@@ -145,7 +148,7 @@ export async function generateStructured<T>(options: {
 
         const overloadDelay = overloadRetryDelayMs(error)
         const delay = overloadDelay ?? Math.min(250 * 2 ** (attempt - 1), 2_000)
-        if (attempt < overloadRetries) {
+        if (attempt < overloadRetries && (options.maxTotalAttempts === undefined || attempts.length < options.maxTotalAttempts)) {
           log('info', 'model call retry scheduled', { label: options.label, model: modelId, nextAttempt: attempt + 1, delayMs: Math.min(delay, MAX_OVERLOAD_DELAY_MS) })
           await sleep(Math.min(delay, MAX_OVERLOAD_DELAY_MS))
         }

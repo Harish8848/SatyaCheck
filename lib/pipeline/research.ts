@@ -8,7 +8,7 @@ export { dedupeKey } from './research-parse'
 
 /** Reference providers plus the parallel aggregator used by the evidence stage. */
 
-type ResearchProvider = { name: string; search: (query: string) => Promise<ResearchSource[]> }
+export type ResearchProvider = { name: string; search: (query: string) => Promise<ResearchSource[]> }
 
 const MAX_SNIPPET = 1200
 const MAX_PER_QUERY = 12
@@ -84,7 +84,13 @@ export const providerCount = providers.length
  * Query every provider in parallel. Provider *errors* are reported separately
  * from empty results so callers can tell "nothing found" from "could not look".
  */
+const searchCache = new Map<string, { expires: number; sources: ResearchSource[] }>()
+const cleanupTimer = setInterval(() => { for (const [key, value] of searchCache) if (value.expires <= Date.now()) searchCache.delete(key) }, 60_000)
+cleanupTimer.unref()
 export async function searchAll(query: string): Promise<{ sources: ResearchSource[]; failures: string[] }> {
+  const cached = searchCache.get(query)
+  if (cached && cached.expires > Date.now()) return { sources: cached.sources.map(s => ({ ...s })), failures: [] }
+
   const settled = await Promise.allSettled(providers.map((provider) => provider.search(query)))
   const failures: string[] = []
   const grouped = settled.map((result, index) => {
@@ -103,13 +109,18 @@ export async function searchAll(query: string): Promise<{ sources: ResearchSourc
     for (const group of grouped) {
       const source = group[round]
       if (!source || sources.length >= MAX_PER_QUERY) continue
+      try { const url = new URL(source.url); if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) continue } catch { continue }
       const urlId = dedupeKey(source.url)
       const titleId = titleKey(source.title)
       if (!urlId || seenUrls.has(urlId) || seenTitles.has(titleId)) continue
       seenUrls.add(urlId)
       seenTitles.add(titleId)
-      sources.push({ ...source, snippet: source.provider === 'Google Fact Check' ? source.snippet : source.snippet.slice(0, MAX_SNIPPET) })
+      sources.push({ ...source, retrievedAt: source.retrievedAt ?? new Date().toISOString(), snippet: source.provider === 'Google Fact Check' ? source.snippet : source.snippet.slice(0, MAX_SNIPPET) })
     }
+  }
+  if (!failures.length) {
+    if (searchCache.size >= 100) searchCache.delete(searchCache.keys().next().value!)
+    searchCache.set(query, { expires: Date.now() + 5 * 60_000, sources: sources.map(s => ({ ...s })) })
   }
   return { sources, failures }
 }

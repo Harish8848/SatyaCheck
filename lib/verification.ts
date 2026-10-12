@@ -1,5 +1,5 @@
 import { desc, eq, inArray } from 'drizzle-orm'
-import { db } from '@/lib/db'
+import { db, assertDatabaseConfigured } from '@/lib/db'
 import { verificationRequests, verificationSources } from '@/lib/db/schema'
 import { UserFacingError } from '@/lib/core/errors'
 import { describeError, log } from '@/lib/core/logger'
@@ -35,10 +35,10 @@ async function persistReport(id: string, report: PipelineReport) {
     }
     await tx.update(verificationRequests).set({
       status: 'completed',
-      verdict: verdictLabel(assessment.verdict),
+      verdict: assessment.evidenceReport?.claims.length === 1 ? assessment.evidenceReport.claims[0].verdict : assessment.evidenceReport ? 'Claim-by-claim assessment' : verdictLabel(assessment.verdict),
       finalVerdict: assessment.verdict,
-      confidence: assessment.confidence,
-      summary: `${assessment.headline} ${assessment.reasoning}`.trim(),
+      confidence: assessment.evidenceReport ? null : assessment.confidence,
+      summary: assessment.evidenceReport?.summary ?? `${assessment.headline} ${assessment.reasoning}`.trim(),
       aiSignal: report.aiSignal ?? null,
       inputMeta: report.ingested,
       claims: report.claims,
@@ -54,12 +54,14 @@ async function markFailed(id: string, summary: string) {
 }
 
 export async function getVerification(id: string) {
+  assertDatabaseConfigured()
   const [row] = await db.select().from(verificationRequests).where(eq(verificationRequests.id, id)).limit(1)
   if (!row) return undefined
   return toVerification(row, (await loadSources([id])).get(id) ?? [])
 }
 
 export async function listVerifications(limit = 50) {
+  assertDatabaseConfigured()
   const rows = await db.select().from(verificationRequests).orderBy(desc(verificationRequests.createdAt)).limit(limit)
   const sources = await loadSources(rows.map((row) => row.id))
   return rows.map((row) => toVerification(row, sources.get(row.id) ?? []))
@@ -71,14 +73,15 @@ export async function listVerifications(limit = 50) {
  * UserFacingError so the API can answer 422; any other failure is stored as a
  * failed report rather than an HTTP 500.
  */
-export async function createVerification(input: { inputType: InputType; inputText?: string; sourceName?: string; media?: MediaUpload }) {
+export async function createVerification(input: { inputType: InputType; inputText?: string; sourceName?: string; media?: MediaUpload; reviewedClaims?: Submission['reviewedClaims'] }, progress?: import('@/lib/pipeline/orchestrator').Progress, prepared?: import('@/lib/pipeline/review').PreparedInput) {
+  assertDatabaseConfigured()
   const [request] = await db.insert(verificationRequests).values({
     inputType: input.inputType, inputText: input.inputText, sourceName: input.sourceName,
     status: 'processing', verdict: 'Researching evidence', summary: 'Extracting claims and researching external sources.',
   }).returning()
-  const submission: Submission = { inputType: input.inputType, inputText: input.inputText, sourceName: input.sourceName, media: input.media }
+  const submission: Submission = { inputType: input.inputType, inputText: input.inputText, sourceName: input.sourceName, media: input.media, reviewedClaims: input.reviewedClaims }
   try {
-    await persistReport(request.id, await runPipeline(submission))
+    await persistReport(request.id, await runPipeline(submission, progress, prepared))
   } catch (error) {
     log('error', 'verification failed', { id: request.id, error: describeError(error) })
     if (error instanceof UserFacingError) {
