@@ -97,7 +97,7 @@ test('timeouts and server errors do not launch immediate retries', async () => {
   }
 })
 
-test('other provider results survive GDELT rate limits and cooldown is disclosed', async () => {
+test('other research providers remain usable while the disabled GDELT adapter is isolated', async () => {
   const original = globalThis.fetch
   let gdeltCalls = 0
   globalThis.fetch = async url => {
@@ -112,10 +112,10 @@ test('other provider results survive GDELT rate limits and cooldown is disclosed
   try {
     const result = await searchAll('gdelt outage fixture')
     assert.ok(result.sources.some(s => s.provider === 'Google News'))
-    assert.ok(result.failures.some(f => /GDELT: Rate limited/.test(f)))
+    assert.equal(result.failures.some(f => /GDELT/.test(f)), false)
     const later = await searchAll('gdelt cooldown fixture')
     assert.ok(later.sources.some(s => s.provider === 'Google News'))
-    assert.ok(later.failures.some(f => /GDELT: Temporarily paused/.test(f)))
-    assert.equal(gdeltCalls, 1)
+    assert.equal(later.failures.some(f => /GDELT/.test(f)), false)
+    assert.equal(gdeltCalls, 0)
   } finally { globalThis.fetch = original }
 })

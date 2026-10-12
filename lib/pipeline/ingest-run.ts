@@ -116,14 +116,21 @@ export async function ingestSubmission(submission: Submission): Promise<Ingested
     const url = typed
     const blocked = blockedUrl(url)
     if (!url || blocked) throw new UserFacingError(blocked ?? 'Provide the article URL you want checked.')
+    let parsedUrl: URL
+    try { parsedUrl = new URL(url) } catch { throw new UserFacingError('Provide a valid public article or post URL.') }
+    const isFacebookShare = /(^|\.)facebook\.com$/i.test(parsedUrl.hostname) && /^\/share\//i.test(parsedUrl.pathname)
     let page
     try {
       page = await extractPage(url)
     } catch (error) {
+      if (isFacebookShare) throw new UserFacingError('Facebook share links usually require a login and do not expose the post text to automated readers. Open the post publicly, copy its direct post URL, or paste the post text here.')
       if (error instanceof UserFacingError) throw error
       throw new UserFacingError(`The page could not be fetched (${describeError(error)}). Paste the article text instead.`)
     }
-    if (!page.text) throw new UserFacingError('No readable article text was found at that URL. Paste the text instead.')
+    if (!page.text) {
+      if (isFacebookShare) throw new UserFacingError('This Facebook share link did not expose readable post text. Use the public post URL (not the /share/ link) or paste the post text here. You can also upload a screenshot for OCR.')
+      throw new UserFacingError('No readable article text was found at that URL. Paste the text instead.')
+    }
     const header = [page.title && `Title: ${page.title}`, page.author && `Author: ${page.author}`, page.publishedAt && `Published: ${page.publishedAt}`].filter(Boolean).join('\n')
     return {
       linkedSources: page.linkedSources,

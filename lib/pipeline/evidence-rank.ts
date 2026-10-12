@@ -31,10 +31,14 @@ function normalizeQuery(text: string): string {
 }
 
 export function planQueries(claim: Pick<ExtractedClaim, 'text' | 'entities' | 'verificationQuestion'>): string[] {
+  const focusedTerms = [...new Set([
+    ...claim.entities.flatMap(tokenize),
+    ...tokenize(claim.verificationQuestion),
+  ])].slice(0, 12).join(' ')
   const queries = [
-    normalizeQuery(claim.text),
-    normalizeQuery(`${claim.entities.slice(0, 5).join(' ')} ${claim.text.slice(0, 180)}`),
+    normalizeQuery(focusedTerms),
     normalizeQuery(`${claim.entities.slice(0, 5).join(' ')} ${claim.verificationQuestion}`),
+    normalizeQuery(claim.text),
   ].filter(Boolean)
   const seen = new Set<string>()
   return queries

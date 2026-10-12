@@ -1,6 +1,6 @@
 import type { EvidenceItem, ExtractedClaim, IngestedInput } from './types'
 
-export const assessmentVerdicts = ['Supported', 'Mostly supported', 'Mixed', 'Unsupported', 'Contradicted', 'Insufficient evidence', 'Not fact-checkable'] as const
+export const assessmentVerdicts = ['Supported', 'Mostly supported', 'Mixed', 'Unsupported', 'Contradicted', 'Insufficient evidence', 'Not checked', 'Not fact-checkable'] as const
 export type EvidenceVerdict = typeof assessmentVerdicts[number]
 export const defaultRubric = { direct: 35, independence: 25, quality: 20, context: 15, authenticity: 5 }
 export type Rubric = typeof defaultRubric
@@ -51,7 +51,7 @@ export function assessClaim(claim: ExtractedClaim, sources: EvidenceItem[], opti
   const limitations: string[] = []
   const context = own.filter(s => s.relation === 'context' || s.contextMatch !== 'matched').map(s => `${s.id}: ${s.reasoning || 'This source does not settle the exact claim.'}`)
   const groups = new Set(read.filter(s => s.independentReporting && s.sourceGroup).map(s => s.sourceGroup))
-  let verdict: EvidenceVerdict = claim.claimType !== 'factual' ? 'Not fact-checkable' : 'Insufficient evidence'
+  let verdict: EvidenceVerdict = claim.claimType !== 'factual' ? 'Not fact-checkable' : options.assessed ? 'Insufficient evidence' : 'Not checked'
   if (claim.claimType === 'factual' && options.assessed) {
     if (support.length && contradiction.length) verdict = 'Mixed'
     else if (contradiction.length) verdict = 'Contradicted'
@@ -71,13 +71,13 @@ export function assessClaim(claim: ExtractedClaim, sources: EvidenceItem[], opti
     component('context', evaluated.length ? 1 : 0, 'Judged match of event, participants, location and time, with a verified excerpt.', evaluated),
     component('authenticity', 0, 'No document signature or account ownership was independently authenticated. Badges visible in media earn no points.', []),
   ]
-  let score: number | null = ['Not fact-checkable', 'Insufficient evidence'].includes(verdict) ? null : Math.min(100, components.reduce((sum, c) => sum + c.points, 0))
+  let score: number | null = ['Not fact-checkable', 'Insufficient evidence', 'Not checked'].includes(verdict) ? null : Math.min(100, components.reduce((sum, c) => sum + c.points, 0))
   const cap = (value: number, reason: string) => { if (score !== null) score = Math.min(score, value); limitations.push(reason) }
   if (support.length && contradiction.length) cap(60, 'Unresolved direct contradictions cap evidence strength at 60.')
   if (own.some(s => s.evidenceBasis === 'search_snippet')) cap(70, 'Some sources could only be assessed as snippets; evidence strength is capped at 70.')
   if (options.incomplete) cap(60, 'Input processing or media sampling is incomplete; evidence strength is capped at 60.')
-  if (!evaluated.length && claim.claimType === 'factual') limitations.push('No inspected, quoted source settles the exact claim. Search absence is not evidence of falsehood.')
-  if (!options.assessed && claim.claimType === 'factual') limitations.push('This claim was not researched because of the submission limit or a processing failure.')
+  if (!evaluated.length && claim.claimType === 'factual' && options.assessed) limitations.push('No inspected, quoted source settles the exact claim. Search absence is not evidence of falsehood.')
+  if (!options.assessed && claim.claimType === 'factual') limitations.push('This claim was not checked because of the per-submission limit or a processing failure. No verdict is implied.')
   limitations.push('Shared origins are grouped conservatively; undetected copying may remain. Source authenticity was not established.')
   return { claimId: claim.id, claim: claim.text, verdict, evidenceStrength: score, assessed: options.assessed && claim.claimType === 'factual',
     findings: own.filter(s => s.quoteVerified && s.quote).map(s => ({ text: `${s.publisher} reports: “${s.quote}” (${s.relation}).`, evidenceIds: [s.id] })), context, components, limitations }

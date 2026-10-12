@@ -82,7 +82,10 @@ export async function gatherEvidence(claim: ExtractedClaim, linkedSources: strin
   }
 
   // Read a bounded set of direct pages. Keep snippets when a site blocks access.
-  const readable = top.filter(c => c.source.evidenceBasis === 'search_snippet' && !c.source.url.includes('news.google.com/')).slice(0, 3)
+  // Google News RSS links are redirect wrappers, but fetchPublicPage follows
+  // safe redirects and records the publisher URL. Excluding them left only
+  // headlines, making relevant evidence look like mere context.
+  const readable = top.filter(c => c.source.evidenceBasis === 'search_snippet').slice(0, 3)
   await Promise.all(readable.map(async candidate => {
     try {
       const page = await extractPage(candidate.source.url)

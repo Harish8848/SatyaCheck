@@ -2,7 +2,7 @@ import { searchFactChecks } from './fact-check'
 import { describeError, log } from '../core/logger'
 import { ResearchProviderError } from '../core/research-error'
 import { dedupeKey, fetchResearch, stripHtml, titleKey, toIso, USER_AGENT, type ResearchSource } from './research-parse'
-import { searchGdelt, searchGoogleNews } from './research-news'
+import { searchGoogleNews } from './research-news'
 
 export type { ResearchSource } from './research-parse'
 export { dedupeKey } from './research-parse'
@@ -73,7 +73,6 @@ async function searchCrossref(query: string): Promise<ResearchSource[]> {
 
 const providers: ResearchProvider[] = [
   ...(process.env.GOOGLE_FACT_CHECK_API_KEY ? [{ name: 'Google Fact Check', search: searchFactChecks }] : []),
-  { name: 'GDELT', search: searchGdelt },
   { name: 'Google News', search: searchGoogleNews },
   { name: 'Wikipedia', search: searchWikipedia },
   { name: 'Crossref', search: searchCrossref },

@@ -69,6 +69,7 @@ export async function extractClaims(
     // model plus the provider list here caused a duplicate Gemini call before
     // Groq/Cerebras could be reached.
     models: config.analystModels,
+    timeoutMs: config.claimExtractionTimeoutMs,
     system: SYSTEM,
     prompt: [`Source: ${context.sourceLabel}`, context.aiSignalSummary ? `Media context: ${context.aiSignalSummary}` : '', 'Extract claims from:', trimmed].filter(Boolean).join('\n'),
   })

@@ -17,6 +17,8 @@ export class ModelUnavailableError extends Error {
 }
 
 const MAX_OVERLOAD_DELAY_MS = 2_000
+const QUOTA_COOLDOWN_MS = 60_000
+const providerCooldownUntil = new Map<string, number>()
 
 /** Quota errors carry a suggested retry delay like "Please retry in 19.65s." */
 export function quotaRetryDelayMs(error: unknown): number | undefined {
@@ -111,6 +113,11 @@ export async function generateStructured<T>(options: {
     const provider = providerFor(providerName)
     if (!provider) continue
     const modelId = `${provider.name}/${provider.model}`
+    const cooldown = providerCooldownUntil.get(provider.name) ?? 0
+    if (cooldown > Date.now()) {
+      log('info', 'model provider skipped during quota cooldown', { label: options.label, provider: provider.name })
+      continue
+    }
     for (let attempt = 1; attempt <= overloadRetries; attempt += 1) {
       if (options.maxTotalAttempts !== undefined && attempts.length >= options.maxTotalAttempts) break
       const started = Date.now()
@@ -141,7 +148,10 @@ export async function generateStructured<T>(options: {
 
         // A quota-exhausted model will not recover on the next attempt, so move
         // on to the next fallback immediately instead of burning retries.
-        if (isQuotaOrUnavailable(error)) break
+        if (isQuotaOrUnavailable(error)) {
+          providerCooldownUntil.set(provider.name, Date.now() + QUOTA_COOLDOWN_MS)
+          break
+        }
 
         // Schema/shape failures will not fix themselves either: retrying the same
         // model with the same prompt reproduces the same bad output.

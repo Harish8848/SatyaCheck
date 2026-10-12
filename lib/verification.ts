@@ -12,6 +12,23 @@ import { toVerification, type InputType, type MediaUpload, type SourceRow } from
 export { inputTypes, statuses } from '@/lib/verification-model'
 export type { InputType, MediaUpload, VerificationRequest, VerificationStatus } from '@/lib/verification-model'
 
+// Web pages and model output can contain NULs or lone UTF-16 surrogates.
+// PostgreSQL rejects those values with SQLSTATE 22021, so clean text at the
+// persistence boundary instead of allowing one source to fail the whole job.
+function cleanText(value: string): string {
+  const withoutNul = value.replace(/\u0000/g, '')
+  return new TextDecoder().decode(new TextEncoder().encode(withoutNul))
+}
+
+function cleanJson<T>(value: T): T {
+  if (typeof value === 'string') return cleanText(value) as T
+  if (Array.isArray(value)) return value.map(item => cleanJson(item)) as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [cleanText(key), cleanJson(item)])) as T
+  }
+  return value
+}
+
 async function loadSources(ids: string[]): Promise<Map<string, SourceRow[]>> {
   const grouped = new Map<string, SourceRow[]>()
   if (!ids.length) return grouped
@@ -26,11 +43,11 @@ async function persistReport(id: string, report: PipelineReport) {
     await tx.delete(verificationSources).where(eq(verificationSources.requestId, id))
     if (report.evidence.length) {
       await tx.insert(verificationSources).values(report.evidence.map((item) => ({
-        requestId: id, claimId: item.claimId ?? '', title: item.title, url: item.url, domain: item.domain, publisher: item.publisher,
-        tier: item.tier, relation: item.relation, relevanceKind: item.relevanceKind, evidenceBasis: item.evidenceBasis,
-        quoteVerified: item.quoteVerified, publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, snippet: item.snippet,
-        quote: item.quote ?? null, relevance: item.relevance, authority: item.authority, recency: item.recency ?? null,
-        provider: item.provider, reasoning: item.reasoning ?? null,
+        requestId: id, claimId: cleanText(item.claimId ?? ''), title: cleanText(item.title), url: cleanText(item.url), domain: cleanText(item.domain), publisher: cleanText(item.publisher),
+        tier: cleanText(item.tier), relation: cleanText(item.relation), relevanceKind: item.relevanceKind, evidenceBasis: item.evidenceBasis,
+        quoteVerified: item.quoteVerified, publishedAt: item.publishedAt ? new Date(item.publishedAt) : null, snippet: cleanText(item.snippet),
+        quote: item.quote ? cleanText(item.quote) : null, relevance: item.relevance, authority: item.authority, recency: item.recency ?? null,
+        provider: cleanText(item.provider), reasoning: item.reasoning ? cleanText(item.reasoning) : null,
       })))
     }
     await tx.update(verificationRequests).set({
@@ -40,10 +57,10 @@ async function persistReport(id: string, report: PipelineReport) {
       confidence: assessment.evidenceReport ? null : assessment.confidence,
       summary: assessment.evidenceReport?.summary ?? `${assessment.headline} ${assessment.reasoning}`.trim(),
       aiSignal: report.aiSignal ?? null,
-      inputMeta: report.ingested,
-      claims: report.claims,
-      stages: report.stages,
-      assessment,
+      inputMeta: cleanJson(report.ingested),
+      claims: cleanJson(report.claims),
+      stages: cleanJson(report.stages),
+      assessment: cleanJson(assessment),
       completedAt: new Date(),
     }).where(eq(verificationRequests.id, id))
   })
